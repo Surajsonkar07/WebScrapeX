@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(req: NextRequest) {
+    const url = new URL(req.url);
+    // Skip static files immediately
+    if (url.pathname.match(/\.(ico|png|jpg|jpeg|svg|css|js|webmanifest|json)$/)) {
+        return NextResponse.next();
+    }
+
     let res = NextResponse.next({
         request: {
             headers: req.headers,
