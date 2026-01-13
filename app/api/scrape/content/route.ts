@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 
@@ -12,9 +12,11 @@ export async function GET(req: NextRequest) {
     }
 
     try {
+        const client = (supabaseAdmin || supabase) as any;
+
         // Fetch from Supabase instead of local file system
         // We need: metadata, raw website info
-        const { data: metadata, error: metaError } = await (supabase as any)
+        const { data: metadata, error: metaError } = await client
             .from('metadata')
             .select('*')
             .eq('website_id', id)

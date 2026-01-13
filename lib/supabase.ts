@@ -13,3 +13,14 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_A
 }
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+
+// Admin client for server-side operations (bypasses RLS)
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+export const supabaseAdmin = serviceRoleKey
+    ? createClient<Database>(supabaseUrl, serviceRoleKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    })
+    : supabase; // Fallback to anon (will fail if RLS blocks, but better than crash)

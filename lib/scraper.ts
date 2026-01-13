@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs/promises';
 // import puppeteer from 'puppeteer-core'; // REMOVED TOP-LEVEL IMPORT
-import { supabase } from './supabase';
+import { supabase, supabaseAdmin } from './supabase';
 import { extractMetadata } from './extractors/meta';
 import { extractColors } from './extractors/colors';
 import { extractFonts } from './extractors/fonts';
@@ -9,7 +9,7 @@ import { detectTechnologies } from './extractors/tech';
 import { extractContent } from './extractors/content';
 import { ScrapeResult } from './scraper-types';
 
-const supabaseClient = supabase as any;
+const supabaseClient = (supabaseAdmin || supabase) as any;
 
 export async function scrapeWebsite(id: string, url: string): Promise<ScrapeResult> {
     const log = async (message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {
