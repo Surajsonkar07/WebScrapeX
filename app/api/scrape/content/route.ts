@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import path from 'path';
-import fs from 'fs/promises';
+import { supabase } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 
@@ -13,23 +12,50 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const scrapeDir = path.resolve(process.cwd(), 'tmp', 'scrapes', id);
-        const resultPath = path.join(scrapeDir, 'result.json');
+        // Fetch from Supabase instead of local file system
+        // We need: metadata, raw website info
+        const { data: metadata, error: metaError } = await (supabase as any)
+            .from('metadata')
+            .select('*')
+            .eq('website_id', id)
+            .single();
 
-        // Check if full result exists
-        try {
-            await fs.access(resultPath);
-            const content = await fs.readFile(resultPath, 'utf-8');
-            return NextResponse.json(JSON.parse(content));
-        } catch {
-            // Fallback to content.json for legacy or partial
-            const contentPath = path.join(scrapeDir, 'content.json');
-            await fs.access(contentPath);
-            const content = await fs.readFile(contentPath, 'utf-8');
-            return NextResponse.json(JSON.parse(content));
+        const { data: website, error: webError } = await (supabase as any)
+            .from('websites')
+            .select('url')
+            .eq('id', id)
+            .single();
+
+        if (metaError || webError || !metadata) {
+            console.error('Supabase Fetch Error:', metaError, webError);
+            return NextResponse.json({ error: 'Content not found' }, { status: 404 });
         }
 
+        // Reconstruct the ScrapeResult shape as best as possible from DB
+        const result = {
+            url: website?.url || '',
+            metadata: {
+                title: metadata.title || '',
+                description: metadata.description || '',
+                keywords: metadata.keywords || [],
+                favicon: metadata.favicon || ''
+            },
+            colors: metadata.color_palette || [],
+            fonts: metadata.fonts || [],
+            images: (metadata.images || []).map((url: string) => ({ url })),
+            technologies: metadata.technologies || [],
+            // These fields might be empty if not stored in DB, but this prevents the 500 crash
+            cssFiles: [],
+            jsFiles: [],
+            html: '',
+            links: [],
+            rawAssets: []
+        };
+
+        return NextResponse.json(result);
+
     } catch (error) {
+        console.error('Content API Error:', error);
         return NextResponse.json({ error: 'Failed to retrieve content' }, { status: 500 });
     }
 }
