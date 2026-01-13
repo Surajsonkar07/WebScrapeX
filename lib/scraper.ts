@@ -1,8 +1,26 @@
-import scrape from 'website-scraper';
-import PuppeteerPlugin from 'website-scraper-puppeteer';
-import path from 'path';
-import fs from 'fs/promises';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+
+// ... imports ...
+
+// Inside scrapeWebsite function:
+await log('Launching deep-analysis browser (Hybrid Mode)...');
+
+let browser;
+if (process.env.BROWSER_WS_ENDPOINT) {
+    await log(`Connecting to remote browser...`);
+    browser = await puppeteer.connect({
+        browserWSEndpoint: process.env.BROWSER_WS_ENDPOINT,
+    });
+} else {
+    await log('No remote browser configured (PUPPETEER_CORE active). Skipping deep (JS) analysis.', 'warning');
+    // Throw to fall back to static scraping
+    throw new Error('No BROWSER_WS_ENDPOINT configured for production scraping.');
+}
+
+// Removing the old launch block entirely for now to save space in this replacement
+/* 
+const browser = await puppeteer.launch({ ...old args... }) 
+*/
 import { supabase } from './supabase';
 import { extractMetadata } from './extractors/meta';
 import { extractColors } from './extractors/colors';
