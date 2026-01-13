@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs/promises';
-import puppeteer from 'puppeteer-core';
+// import puppeteer from 'puppeteer-core'; // REMOVED TOP-LEVEL IMPORT
 import { supabase } from './supabase';
 import { extractMetadata } from './extractors/meta';
 import { extractColors } from './extractors/colors';
@@ -47,11 +47,17 @@ export async function scrapeWebsite(id: string, url: string): Promise<ScrapeResu
             }
 
             if (process.env.BROWSER_WS_ENDPOINT) {
+                // Dynamic import for Vercel safety
+                const puppeteer = (await import('puppeteer-core')).default;
+
                 await log(`Connecting to remote browser...`);
                 browser = await puppeteer.connect({
                     browserWSEndpoint: process.env.BROWSER_WS_ENDPOINT,
                 });
             } else if (executablePath) {
+                // Dynamic import for local safety
+                const puppeteer = (await import('puppeteer-core')).default;
+
                 await log(`Launching local Chrome from ${executablePath}...`);
                 browser = await puppeteer.launch({
                     args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -168,8 +174,6 @@ export async function scrapeWebsite(id: string, url: string): Promise<ScrapeResu
         const technologies = detectTechnologies(htmlContent, deepFindings.colors.join(' '));
 
         const mergedImages: any[] = deepFindings.images.filter(u => u && !u.startsWith('data:')).map(url => ({ url, size: 0 }));
-        // Note: Without website-scraper, we don't have separate CSS/JS files downloaded. 
-        // We could extract them from HTML links if needed, but for now we focus on the requested "images".
         const cssFiles: any[] = [];
         const jsFiles: any[] = [];
         const rawAssets: any[] = [];
