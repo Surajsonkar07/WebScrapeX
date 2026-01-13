@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import { Database } from './types'
 
 // Fallback to a valid URL format to prevent build crashes if env vars are missing
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
+const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseUrl = (envUrl && envUrl.startsWith('http')) ? envUrl : 'https://placeholder.supabase.co'
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
 
 console.log('Supabase URL init:', supabaseUrl)
