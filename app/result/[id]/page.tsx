@@ -167,7 +167,7 @@ export default function ResultPage() {
                                 <motion.div id="colors" variants={itemVariants}>
                                     <ColorPaletteCard colors={result.colors} />
                                 </motion.div>
-                                <motion.div id="fonts" variants={itemVariants}>
+                                <motion.div id="fonts" variants={itemVariants} className="md:col-span-2 lg:col-span-2">
                                     <FontsCard fonts={result.fonts} />
                                 </motion.div>
                                 <motion.div id="images" variants={itemVariants} className="lg:col-span-3 2xl:col-span-4">

@@ -53,7 +53,7 @@ export function ColorPaletteCard({ colors }: { colors: string[] }) {
                 </div>
             </CardHeader>
             <CardContent className="p-8 pt-2">
-                <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 md:gap-6">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
                     {colors.map((color, i) => (
                         <motion.button
                             key={i}
@@ -63,10 +63,10 @@ export function ColorPaletteCard({ colors }: { colors: string[] }) {
                             whileHover={{ scale: 1.1, y: -5 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={() => copyToClipboard(color)}
-                            className="group relative flex flex-col items-center gap-2 md:gap-3"
+                            className="group relative flex flex-col items-center gap-2"
                         >
                             <div
-                                className="w-full aspect-square rounded-[1rem] md:rounded-[1.25rem] shadow-xl md:shadow-2xl border-2 border-white/10 group-hover:border-primary/50 transition-colors relative overflow-hidden"
+                                className="w-full aspect-square rounded-[1rem] shadow-lg border-2 border-white/10 group-hover:border-primary/50 transition-colors relative overflow-hidden"
                                 style={{ backgroundColor: color }}
                             >
                                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 bg-black/40 backdrop-blur-[2px]">
@@ -78,7 +78,7 @@ export function ColorPaletteCard({ colors }: { colors: string[] }) {
                                                 animate={{ scale: 1, rotate: 0 }}
                                                 exit={{ scale: 0 }}
                                             >
-                                                <Check className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                                                <Check className="w-5 h-5 text-white" />
                                             </motion.div>
                                         ) : (
                                             <motion.div
@@ -87,14 +87,14 @@ export function ColorPaletteCard({ colors }: { colors: string[] }) {
                                                 animate={{ scale: 1 }}
                                                 exit={{ scale: 0 }}
                                             >
-                                                <Copy className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                                                <Copy className="w-5 h-5 text-white" />
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
                                 </div>
                             </div>
                             <div className="flex flex-col items-center w-full px-1">
-                                <span className="text-[9px] md:text-[10px] font-mono font-black tracking-wider text-foreground/80 group-hover:text-primary transition-colors uppercase w-full text-center truncate">
+                                <span className="text-[10px] font-mono font-black tracking-wider text-foreground/80 group-hover:text-primary transition-colors uppercase text-center">
                                     {format === 'hex' ? color : hexToRgb(color).replace('rgb(', '').replace(')', '')}
                                 </span>
                             </div>

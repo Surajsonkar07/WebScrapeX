@@ -1,11 +1,11 @@
 # Deployment Guide for WebScrapeX
 
-This guide will help you deploy your WebScrapeX application to production using **Vercel** (recommended for Next.js) and configure **Supabase** correctly.
+This guide will help you deploy your WebScrapeX application to production using **Netlify** (recommended for this setup) and configure **Supabase** correctly.
 
 ## 1. Prerequisites
 
 -   A [GitHub](https://github.com) account.
--   A [Vercel](https://vercel.com) account.
+-   A [Netlify](https://netlify.com) account.
 -   Your [Supabase](https://supabase.com) project URL and Anon Key.
 
 ## 2. Push Code to GitHub
@@ -23,16 +23,22 @@ This guide will help you deploy your WebScrapeX application to production using 
     git push -u origin main
     ```
 
-## 3. Deploy to Vercel
+## 3. Deploy to Netlify
 
-1.  Go to your [Vercel Dashboard](https://vercel.com/dashboard).
-2.  Click **"Add New..."** -> **"Project"**.
-3.  Import your GitHub repository.
-4.  **Configure Environment Variables**:
-    You must add the following variables (copy them from your `.env.local` file):
+1.  Log in to your [Netlify Dashboard](https://app.netlify.com/).
+2.  Click **"Add new site"** -> **"Import an existing project"**.
+3.  Select **GitHub**.
+4.  Authorize Netlify and choose your `web-scrape-x` repository.
+5.  **Build Settings:**
+    *   **Base directory:** `(leave empty)`
+    *   **Build command:** `npm run build`
+    *   **Publish directory:** `.next`
+    *   *(Note: The `netlify.toml` file in your project should auto-fill these for you).*
+6.  **Environment Variables (CRITICAL):**
+    Click on **"Add environment variables"** and add the keys from your local `.env.local` file:
     *   `NEXT_PUBLIC_SUPABASE_URL`
     *   `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-5.  Click **"Deploy"**.
+7.  Click **"Deploy web-scrape-x"**.
 
 ## 4. Configure Supabase for Production
 
@@ -41,15 +47,15 @@ This guide will help you deploy your WebScrapeX application to production using 
 1.  Go to your [Supabase Dashboard](https://supabase.com/dashboard).
 2.  Select your project.
 3.  Navigate to **Authentication** -> **URL Configuration**.
-4.  **Site URL**: Set this to your Vercel domain (e.g., `https://webscrapex-production.vercel.app`).
+4.  **Site URL**: Set this to your Netlify domain (e.g., `https://your-site-name.netlify.app`).
 5.  **Redirect URLs**: Add the following:
-    *   `https://webscrapex-production.vercel.app/**`
-    *   `https://webscrapex-production.vercel.app/auth/callback`
-    *   `https://webscrapex-production.vercel.app/`
+    *   `https://your-site-name.netlify.app/**`
+    *   `https://your-site-name.netlify.app/auth/callback`
+    *   `https://your-site-name.netlify.app/`
 
-## 5. Changing the App Name ("Change name to..." instructions)
+## 5. Changing the App Name
 
-If you want to change the application name from "WebScrapeX" to something else (e.g., "MyLocalScraper" or your custom brand), follow these steps:
+If you want to change the application name from "WebScrapeX" to something else (e.g., "MyLocalScraper"), follow these steps:
 
 ### Update Metadata (Tab Title & SEO)
 Edit `app/layout.tsx`:
@@ -70,11 +76,10 @@ export const metadata: Metadata = {
 1.  **Sidebar**: Edit `components/layout/Sidebar.tsx` and find the text "WebScrapeX" inside the `Logo Section`.
 2.  **Mobile Navbar**: Edit `components/layout/Navbar.tsx` and find "WEBSCRAPEX".
 
-## 6. Puppeteer on Vercel (Important Note)
+## 6. Puppeteer on Netlify (Important Warning)
 
-The full Puppeteer library is too large for Vercel Serverless Functions. This project relies on `website-scraper` and `website-scraper-puppeteer`.
-**If you encounter deployment size limits:**
-You may need to exclude the local chromium download or configure the build to use `chrome-aws-lambda` or `sparticuz-chromium` if the default setup exceeds the 50MB limit.
-*However, for basic deployments, the current setup might work if the cache is handled correctly.*
+This project uses `puppeteer` for scraping. By default, Puppeteer tries to download a full version of Chrome, which is **too large** for Netlify's free serverless functions (limited to 50MB).
 
-If the scrape fails in production, consider deploying the **API route** causing the scrape on a platform with fewer limits (like Railway, Render, or a VPS), or using a third-party scraping API service.
+**If your scrape fails in production:**
+1.  **Intermediate Fix**: The project is configured to try and exclude local chromium to save space, but it might still hit memory limits.
+2.  **Recommended Fix**: For valid production scraping, consider using a dedicated scraping API (like Browserless.io or BrightData) and calling it from your API route, OR deploy the API backend to a service that supports Docker containers (like Railway or Render) where size limits are higher.

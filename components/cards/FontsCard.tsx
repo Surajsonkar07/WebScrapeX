@@ -34,32 +34,32 @@ export function FontsCard({ fonts }: { fonts: string[] }) {
                     initial="hidden"
                     whileInView="show"
                     viewport={{ once: true }}
-                    className="space-y-4"
+                    className="grid grid-cols-2 gap-3"
                 >
                     {fonts.map((font, i) => (
                         <motion.div
                             key={i}
                             variants={item}
-                            className="group/font p-6 rounded-[2rem] bg-white/5 border border-white/5 hover:border-primary/20 transition-all hover:bg-white/10 relative overflow-hidden"
+                            className="group/font p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] bg-white/5 border border-white/5 hover:border-primary/20 transition-all hover:bg-white/10 relative overflow-hidden flex flex-col justify-between h-auto min-h-[140px]"
                         >
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-mono font-black text-primary/60 uppercase tracking-widest">{font}</span>
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2 max-w-[80%]">
+                                    <span className="text-[9px] md:text-[10px] font-mono font-black text-primary/60 uppercase tracking-widest truncate w-full">{font}</span>
                                 </div>
-                                <ArrowRight className="w-4 h-4 text-muted-foreground/20 group-hover/font:text-primary transition-all group-hover/font:translate-x-1" />
+                                <ArrowRight className="w-4 h-4 text-muted-foreground/20 group-hover/font:text-primary transition-all group-hover/font:translate-x-1 shrink-0" />
                             </div>
 
                             <motion.p
-                                whileHover={{ scale: 1.05, x: 10 }}
+                                whileHover={{ scale: 1.05, x: 5 }}
                                 transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                                className="text-3xl md:text-4xl truncate text-foreground/90 origin-left cursor-default select-none"
+                                className="text-2xl md:text-4xl leading-tight text-foreground/90 origin-left cursor-default select-none break-words"
                                 style={{ fontFamily: font }}
                             >
-                                The quick brown fox jumps over the lazy dog
+                                The quick...
                             </motion.p>
 
-                            <div className="absolute right-6 bottom-6 opacity-0 group-hover/font:opacity-100 transition-opacity">
-                                <MousePointer2 className="w-4 h-4 text-primary animate-pulse" />
+                            <div className="absolute right-4 bottom-4 opacity-0 group-hover/font:opacity-100 transition-opacity">
+                                <MousePointer2 className="w-3 h-3 md:w-4 md:h-4 text-primary animate-pulse" />
                             </div>
                         </motion.div>
                     ))}
