@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Loader2, ArrowLeft, Download, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
@@ -31,6 +31,7 @@ import { FloatingExportButton } from '@/components/FloatingExportButton';
 
 export default function ResultPage() {
     const { id } = useParams() as { id: string };
+    const router = useRouter();
     const [result, setResult] = useState<ScrapeResult | null>(null);
     const [status, setStatus] = useState<string>('pending');
     const [error, setError] = useState<string | null>(null);
@@ -53,6 +54,12 @@ export default function ResultPage() {
                     if (webData.status === 'completed') {
                         // Fetch the full result.json via API
                         const res = await fetch(`/api/scrape/content?id=${id}`);
+
+                        if (res.status === 401 || res.status === 403) {
+                            router.push('/login');
+                            return;
+                        }
+
                         if (res.ok) {
                             let data = await res.json();
 

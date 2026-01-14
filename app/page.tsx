@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, Variants } from 'framer-motion';
 import { Input } from '@/components/ui/input';
 import { Loader2, Search, Zap, Code2, Palette, FileImage, LayoutGrid, Clock, ArrowRight } from 'lucide-react';
@@ -16,7 +16,8 @@ import { IconGlow } from '@/components/ui/PremiumAnimations';
 
 export default function Home() {
   const { user } = useAuth();
-  const [url, setUrl] = useState('');
+  const searchParams = useSearchParams();
+  const [url, setUrl] = useState(searchParams.get('scrape') || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<any[]>([]);
@@ -62,7 +63,8 @@ export default function Home() {
     if (!url) return;
 
     if (!user) {
-      router.push('/login');
+      const returnUrl = encodeURIComponent(`/?scrape=${encodeURIComponent(url)}`);
+      router.push(`/login?returnTo=${returnUrl}`);
       return;
     }
 
@@ -76,6 +78,11 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       });
+
+      if (res.status === 401) {
+        router.push('/login');
+        return;
+      }
 
       const contentType = res.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {

@@ -6,7 +6,7 @@ import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { Input } from '@/components/ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 export function LoginForm() {
@@ -15,6 +15,8 @@ export function LoginForm() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const returnTo = searchParams.get('returnTo');
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -28,7 +30,12 @@ export function LoginForm() {
             });
 
             if (error) throw error;
-            router.push('/');
+
+            if (returnTo) {
+                router.push(decodeURIComponent(returnTo));
+            } else {
+                router.push('/');
+            }
         } catch (err: any) {
             setError(err.message || 'Login failed');
             setLoading(false);
