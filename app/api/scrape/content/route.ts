@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 export const runtime = 'nodejs';
 
@@ -11,25 +13,58 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'ID is required' }, { status: 400 });
     }
 
+    // Verify Session
+    const cookieStore = await cookies();
+    const supabaseAuth = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                get(name: string) {
+                    return cookieStore.get(name)?.value;
+                },
+                set(name: string, value: string, options: any) {
+                    cookieStore.set({ name, value, ...options });
+                },
+                remove(name: string, options: any) {
+                    cookieStore.set({ name, value: '', ...options });
+                },
+            },
+        }
+    );
+    const { data: { session } } = await supabaseAuth.auth.getSession();
+
+    if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
         const client = (supabaseAdmin || supabase) as any;
 
-        // Fetch from Supabase instead of local file system
-        // We need: metadata, raw website info
+        // Check ownership first
+        const { data: website, error: webError } = await (supabase as any)
+            .from('websites')
+            .select('url, user_id')
+            .eq('id', id)
+            .single();
+
+        if (webError || !website) {
+            return NextResponse.json({ error: 'Website not found' }, { status: 404 });
+        }
+
+        if (website.user_id !== session.user.id) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        // Fetch Metadata
         const { data: metadata, error: metaError } = await client
             .from('metadata')
             .select('*')
             .eq('website_id', id)
             .single();
 
-        const { data: website, error: webError } = await (supabase as any)
-            .from('websites')
-            .select('url')
-            .eq('id', id)
-            .single();
-
-        if (metaError || webError || !metadata) {
-            console.error('Supabase Fetch Error:', metaError, webError);
+        if (metaError || !metadata) {
+            console.error('Supabase Fetch Error:', metaError);
             return NextResponse.json({ error: 'Content not found' }, { status: 404 });
         }
 

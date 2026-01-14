@@ -24,7 +24,12 @@ export default function Home() {
 
   useEffect(() => {
     const fetchHistory = async () => {
-      let query = supabase
+      if (!user) {
+        setHistory([]);
+        return;
+      }
+
+      const { data, error } = await supabase
         .from('websites')
         .select(`
           id,
@@ -37,15 +42,9 @@ export default function Home() {
           )
         `)
         .eq('status', 'completed')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(9);
-
-      // Commented out user_id filter until DB column is added
-      // if (user) {
-      //   query = query.eq('user_id', user.id);
-      // }
-
-      const { data, error } = await query;
 
       if (!error && data) {
         setHistory(data.map((item: any) => ({
@@ -61,6 +60,11 @@ export default function Home() {
   const handleScrape = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
+
+    if (!user) {
+      router.push('/login');
+      return;
+    }
 
     setLoading(true);
     setError(null);

@@ -18,6 +18,7 @@ export interface Database {
           completed_at: string | null
           total_assets: number
           notes: string | null
+          user_id: string | null
         }
         Insert: {
           id?: string
@@ -27,6 +28,7 @@ export interface Database {
           completed_at?: string | null
           total_assets?: number
           notes?: string | null
+          user_id?: string | null
         }
         Update: {
           id?: string
@@ -36,6 +38,7 @@ export interface Database {
           completed_at?: string | null
           total_assets?: number
           notes?: string | null
+          user_id?: string | null
         }
       }
       assets: {

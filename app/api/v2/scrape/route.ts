@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { scrapeWebsite } from '@/lib/scraper';
 import crypto from 'crypto';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 export const runtime = 'nodejs';
 
@@ -11,6 +13,33 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
     console.log('>>> CAPTURE API V2 HIT');
+
+    // Identify user from server-side session
+    const cookieStore = await cookies();
+    const supabaseAuth = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                get(name: string) {
+                    return cookieStore.get(name)?.value;
+                },
+                set(name: string, value: string, options: any) {
+                    cookieStore.set({ name, value, ...options });
+                },
+                remove(name: string, options: any) {
+                    cookieStore.set({ name, value: '', ...options });
+                },
+            },
+        }
+    );
+
+    const { data: { session } } = await supabaseAuth.auth.getSession();
+
+    if (!session) {
+        return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 });
+    }
+
     try {
         const body = await req.json().catch(() => ({}));
         const { url } = body;
@@ -28,7 +57,8 @@ export async function POST(req: NextRequest) {
             .insert({
                 id,
                 url,
-                status: 'pending'
+                status: 'pending',
+                user_id: session.user.id
             });
 
         if (error) {
