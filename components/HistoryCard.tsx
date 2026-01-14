@@ -28,7 +28,7 @@ interface ScrapeHistoryItem {
     };
 }
 
-export function HistoryCard({ item, onDelete }: { item: ScrapeHistoryItem; onDelete: (id: string) => void }) {
+export function HistoryCard({ item, onDelete }: { item: ScrapeHistoryItem; onDelete?: (id: string) => void }) {
     const primaryColor = item.metadata?.color_palette?.[0] || 'var(--primary)';
 
     return (
@@ -38,41 +38,43 @@ export function HistoryCard({ item, onDelete }: { item: ScrapeHistoryItem; onDel
             transition={{ type: "spring", stiffness: 300 }}
             className="relative group/card-container"
         >
-            <Dialog>
-                <DialogTrigger asChild>
-                    <button
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute top-2 right-2 z-30 p-2 rounded-full bg-destructive/10 text-destructive opacity-0 group-hover/card-container:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground focus:opacity-100 outline-none"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md" onClick={(e) => e.stopPropagation()}>
-                    <DialogHeader>
-                        <DialogTitle>Delete Collection?</DialogTitle>
-                        <DialogDescription>
-                            This action cannot be undone. This will permanently delete the scrape data for <span className="font-bold text-foreground">{new URL(item.url).hostname}</span>.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter className="sm:justify-end gap-2">
-                        <DialogClose asChild>
-                            <Button type="button" variant="secondary">
-                                Cancel
-                            </Button>
-                        </DialogClose>
-                        <Button
-                            type="button"
-                            variant="destructive"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                onDelete(item.id);
-                            }}
+            {onDelete && (
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <button
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute top-2 right-2 z-30 p-2 rounded-full bg-destructive/10 text-destructive opacity-0 group-hover/card-container:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground focus:opacity-100 outline-none"
                         >
-                            Delete
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md" onClick={(e) => e.stopPropagation()}>
+                        <DialogHeader>
+                            <DialogTitle>Delete Collection?</DialogTitle>
+                            <DialogDescription>
+                                This action cannot be undone. This will permanently delete the scrape data for <span className="font-bold text-foreground">{new URL(item.url).hostname}</span>.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter className="sm:justify-end gap-2">
+                            <DialogClose asChild>
+                                <Button type="button" variant="secondary">
+                                    Cancel
+                                </Button>
+                            </DialogClose>
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    onDelete(item.id);
+                                }}
+                            >
+                                Delete
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             <Link href={`/result/${item.id}`}>
                 <Card className="h-full overflow-hidden border-border/50 bg-card/40 backdrop-blur-xl relative group">

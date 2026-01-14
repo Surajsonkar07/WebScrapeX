@@ -25,48 +25,70 @@ export async function scrapeWebsite(id: string, url: string): Promise<ScrapeResu
         try {
             await log('Launching deep-analysis browser (Hybrid Mode)...');
 
-            let executablePath = process.env.CHROME_EXECUTABLE_PATH;
-
-            // Auto-detect local Chrome if not explicitly set
-            if (!executablePath && !process.env.BROWSER_WS_ENDPOINT) {
-                const commonPaths = [
-                    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-                    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-                    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-                    '/usr/bin/google-chrome',
-                    '/usr/bin/chromium-browser'
-                ];
-                for (const p of commonPaths) {
-                    try {
-                        await fs.access(p);
-                        executablePath = p;
-                        await log(`Detected local Chrome at: ${p}`);
-                        break;
-                    } catch { }
-                }
-            }
-
             if (process.env.BROWSER_WS_ENDPOINT) {
-                // Dynamic import for Vercel safety
+                // 1. Remote Browser (Highest Priority - Best for Vercel Pro/Scaling)
                 const puppeteer = (await import('puppeteer-core')).default;
 
                 await log(`Connecting to remote browser...`);
                 browser = await puppeteer.connect({
                     browserWSEndpoint: process.env.BROWSER_WS_ENDPOINT,
                 });
-            } else if (executablePath) {
-                // Dynamic import for local safety
-                const puppeteer = (await import('puppeteer-core')).default;
+            } else if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_VERSION) {
+                // 2. Vercel Serverless (Uses @sparticuz/chromium)
+                await log('Detected Serverless Environment. Launching Chromium...');
+                try {
+                    const chromium = (await import('@sparticuz/chromium')).default as any;
+                    const puppeteer = (await import('puppeteer-core')).default;
 
-                await log(`Launching local Chrome from ${executablePath}...`);
-                browser = await puppeteer.launch({
-                    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-                    executablePath: executablePath,
-                    headless: true
-                });
+                    // Recommended settings for Vercel
+                    chromium.setGraphicsMode = false;
+
+                    // Optional: Load a custom font if needed, but skipping for speed
+                    // await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
+
+                    browser = await puppeteer.launch({
+                        args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+                        defaultViewport: chromium.defaultViewport,
+                        executablePath: await chromium.executablePath(),
+                        headless: chromium.headless, // 'shell' mode is faster in recent versions
+                    });
+                } catch (e: any) {
+                    await log(`Serverless Chrome launch failed: ${e.message}`, 'error');
+                    throw e;
+                }
             } else {
-                await log('No remote or local browser found. Deep analysis skipped (Missing images/fonts).', 'warning');
-                await log('To fix locally: Ensure Chrome is installed.', 'info');
+                // 3. Local Development (Auto-detects Chrome)
+                let executablePath = process.env.CHROME_EXECUTABLE_PATH;
+
+                if (!executablePath) {
+                    const commonPaths = [
+                        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+                        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+                        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                        '/usr/bin/google-chrome',
+                        '/usr/bin/chromium-browser'
+                    ];
+                    for (const p of commonPaths) {
+                        try {
+                            await fs.access(p);
+                            executablePath = p;
+                            await log(`Detected local Chrome at: ${p}`);
+                            break;
+                        } catch { }
+                    }
+                }
+
+                if (executablePath) {
+                    const puppeteer = (await import('puppeteer-core')).default;
+                    await log(`Launching local Chrome from ${executablePath}...`);
+                    browser = await puppeteer.launch({
+                        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+                        executablePath: executablePath,
+                        headless: true
+                    });
+                } else {
+                    await log('No browser found. Please install Chrome or set CHROME_EXECUTABLE_PATH.', 'error');
+                }
             }
 
             if (browser) {
