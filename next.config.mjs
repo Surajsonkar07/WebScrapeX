@@ -13,6 +13,7 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium'],
   experimental: {
     outputFileTracingExcludes: {
