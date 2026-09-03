@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/auth-helpers-nextjs';
 import { AnimatedButton } from '@/components/ui/AnimatedButton';
 import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User, Loader2, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, User, Loader2, AlertCircle, ArrowRight, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 
 export function SignUpForm() {
     const supabase = createBrowserClient(
@@ -21,26 +21,52 @@ export function SignUpForm() {
     const [otp, setOtp] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const router = useRouter();
+
+    // Check session on mount / refresh safely
+    useEffect(() => {
+        const checkSession = async () => {
+            // ALWAYS check getSession() BEFORE getUser() to suppress AuthSessionMissingError toast
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    router.push('/');
+                    return;
+                }
+            }
+            // Reset to clean signup form state on page refresh if unverified/missing session
+            setStep('signup');
+        };
+
+        checkSession();
+    }, [supabase, router]);
 
     const handleSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+        setSuccessMessage(null);
 
         try {
-            const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    data: {
-                        full_name: name,
-                    }
-                }
+            // Pre-signup OTP dispatch (NO early Supabase user creation)
+            const response = await fetch('/api/auth/send-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    fullName: name,
+                }),
             });
 
-            if (error) throw error;
-            // Switch to verification step instead of success message
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to send verification code.');
+            }
+
+            setSuccessMessage(data.message || 'Verification code sent!');
             setStep('verify');
         } catch (err: any) {
             setError(err.message || 'Registration failed');
@@ -55,18 +81,67 @@ export function SignUpForm() {
         setError(null);
 
         try {
-            const { error } = await supabase.auth.verifyOtp({
-                email,
-                token: otp,
-                type: 'signup'
+            // Deferred user creation & email verification endpoint
+            const response = await fetch('/api/auth/verify-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    code: otp,
+                    password,
+                    fullName: name,
+                }),
             });
 
-            if (error) throw error;
+            const data = await response.json();
 
-            // Redirect to home on success
+            if (!response.ok) {
+                throw new Error(data.error || 'Verification failed. Check code and try again.');
+            }
+
+            // Auto sign-in user via client signInWithPassword
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+
+            if (signInError) {
+                console.warn('Auto sign-in warning:', signInError.message);
+            }
+
+            // Redirect to home/dashboard on success
             router.push('/');
         } catch (err: any) {
             setError(err.message || 'Verification failed. Check code and try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResendOtp = async () => {
+        setLoading(true);
+        setError(null);
+        setSuccessMessage(null);
+
+        try {
+            const response = await fetch('/api/auth/send-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    fullName: name,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to resend verification code.');
+            }
+
+            setSuccessMessage('A new verification code has been sent to your email.');
+        } catch (err: any) {
+            setError(err.message || 'Failed to resend code');
         } finally {
             setLoading(false);
         }
@@ -85,11 +160,11 @@ export function SignUpForm() {
                     </motion.div>
                     <h2 className="text-2xl font-black tracking-tight">Enter Verification Code</h2>
                     <p className="text-muted-foreground/80 font-medium">
-                        We sent a 6-digit code to <span className="text-primary">{email}</span>
+                        We sent a 6-digit code to <span className="text-primary font-semibold">{email}</span>
                     </p>
                 </div>
 
-                <form onSubmit={handleVerify} className="space-y-6">
+                <form onSubmit={handleVerify} autoComplete="off" className="space-y-6">
                     <AnimatePresence>
                         {error && (
                             <motion.div
@@ -100,6 +175,17 @@ export function SignUpForm() {
                             >
                                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                                 <span className="font-medium">{error}</span>
+                            </motion.div>
+                        )}
+                        {successMessage && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center gap-3"
+                            >
+                                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                                <span className="font-medium">{successMessage}</span>
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -115,10 +201,11 @@ export function SignUpForm() {
                                 required
                                 autoFocus
                                 maxLength={6}
+                                autoComplete="off"
                             />
                             <div className="absolute inset-0 bg-primary/5 blur-xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity -z-10" />
                         </div>
-                        <p className="text-xs text-center text-muted-foreground">Check your spam folder if you don't see it.</p>
+                        <p className="text-xs text-center text-muted-foreground">Check your inbox or spam folder for the 6-digit verification code.</p>
                     </div>
 
                     <AnimatedButton
@@ -128,26 +215,40 @@ export function SignUpForm() {
                     >
                         {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                             <div className="flex items-center gap-2">
-                                <span>Verify & Login</span>
+                                <span>Verify & Finish Registration</span>
                                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                             </div>
                         )}
                     </AnimatedButton>
 
-                    <button
-                        type="button"
-                        onClick={() => setStep('signup')}
-                        className="w-full text-sm text-muted-foreground hover:text-white transition-colors"
-                    >
-                        Change Email Address
-                    </button>
+                    <div className="flex items-center justify-between text-xs font-medium pt-2">
+                        <button
+                            type="button"
+                            onClick={handleResendOtp}
+                            disabled={loading}
+                            className="text-primary hover:underline transition-all disabled:opacity-50"
+                        >
+                            Resend Code
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setStep('signup');
+                                setError(null);
+                                setSuccessMessage(null);
+                            }}
+                            className="text-muted-foreground hover:text-white transition-colors"
+                        >
+                            Change Email Address
+                        </button>
+                    </div>
                 </form>
             </div>
         );
     }
 
     return (
-        <form onSubmit={handleSignUp} className="space-y-8">
+        <form onSubmit={handleSignUp} autoComplete="off" className="space-y-8">
             <AnimatePresence>
                 {error && (
                     <motion.div
@@ -174,6 +275,7 @@ export function SignUpForm() {
                         onChange={(e) => setName(e.target.value)}
                         className="pl-12 h-14 bg-white/5 border-white/10 rounded-2xl focus:bg-white/10 focus:border-primary/50 transition-all text-sm ring-offset-transparent"
                         required
+                        autoComplete="off"
                     />
                     <div className="absolute inset-0 bg-primary/5 blur-xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity -z-10" />
                 </div>
@@ -189,6 +291,7 @@ export function SignUpForm() {
                         onChange={(e) => setEmail(e.target.value)}
                         className="pl-12 h-14 bg-white/5 border-white/10 rounded-2xl focus:bg-white/10 focus:border-primary/50 transition-all text-sm ring-offset-transparent"
                         required
+                        autoComplete="off"
                     />
                     <div className="absolute inset-0 bg-primary/5 blur-xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity -z-10" />
                 </div>
@@ -204,6 +307,7 @@ export function SignUpForm() {
                         onChange={(e) => setPassword(e.target.value)}
                         className="pl-12 pr-12 h-14 bg-white/5 border-white/10 rounded-2xl focus:bg-white/10 focus:border-primary/50 transition-all text-sm ring-offset-transparent"
                         required
+                        autoComplete="new-password"
                     />
                     <button
                         type="button"
@@ -223,7 +327,7 @@ export function SignUpForm() {
             >
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                     <div className="flex items-center gap-2">
-                        <span>Begin Journey</span>
+                        <span>Send Verification Code</span>
                         <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </div>
                 )}
