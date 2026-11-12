@@ -87,7 +87,7 @@ docs/                 PRD.md, TRD.md
 | `/ai-scraper` | ƒ | viewer (API enforces) |
 | `/admin` | ƒ | viewer with `isAdmin` |
 | `/docs`, `/setup` | ƒ | public |
-| `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/offline` | ○ | public |
+| `/login`, `/signup`, `/forgot-password`, `/reset-password` | ƒ (rendered per request so they reflect the current mode) | public |
 | `/manifest.webmanifest`, `/robots.txt`, `/sitemap.xml`, `/icon.svg`, `/apple-icon.png` | ○ | public |
 
 **API** — see §5 for contracts.
@@ -111,7 +111,7 @@ Postgres (`supabase/schema.sql`), all tables RLS-enabled.
 
 Storage bucket `scrapes` (private recommended): `<jobId>/result.json`, `<jobId>/snapshot.pdf`, `<jobId>/assets/<file>`.
 
-**Result JSON** (`ScrapeResult`, `lib/scraper-types.ts`): `version: 2`, `url`, `options {mode, engine, fields[], rowSelector?}`, `fetch {requestedUrl, finalUrl, status, contentType, bytes, durationMs, engine, truncated}`, `robots {allowed, robotsUrl, matchedRule?, crawlDelay?, status}`, `metadata {title, description, keywords[], favicon, lang?, canonical?}`, optional `fields {columns, rows}`, `tables[]`, `headings[]`, `links[]`, `images[]`, `colors[]`, `fonts[]`, `technologies[]`, `social`, `contentAnalysis`, `linkedinProfile`, `seo`, `screenshot` (data URL), `pdfUrl`, `html` (≤ 200 KB), `warnings[]`, `completedAt`. v1 results are mapped by `upgradeV1()`.
+**Result JSON** (`ScrapeResult`, `lib/scraper-types.ts`): `version: 2`, `url`, `options {mode, engine, fields[], rowSelector?}`, `fetch {requestedUrl, finalUrl, status, contentType, bytes, durationMs, engine, truncated}`, `robots {allowed, robotsUrl, matchedRule?, crawlDelay?, status}`, `metadata {title, description, keywords[], favicon, lang?, canonical?}`, optional `fields {columns, rows}`, `tables[]` (data tables only: ≥ 2 columns and ≥ 2 rows), `headings[]`, `links[]`, `images[]`, `colors[]`, `fonts[]`, `technologies[]`, `social`, `contentAnalysis`, `linkedinProfile`, `seo`, `screenshot` (data URL), `pdfUrl`, `html` (≤ 200 KB), `warnings[]`, `completedAt`. v1 results are mapped by `upgradeV1()`.
 
 Local mode mirrors this in `.data/db.json` (`jobs`, `logs`, `keys`, `schedules`), `.data/results/<id>.json`, `.data/files/<id>/…`, with writes serialised through a promise chain.
 
@@ -121,7 +121,9 @@ All JSON errors: `{ error: string, code: string }`. Auth: cookie session, `Beare
 
 | Method & path | Request | Success | Errors |
 |---|---|---|---|
-| `POST /api/v2/scrape` | `{url, mode?=full, engine?=static, fields?[≤25]{name, selector, attribute, attrName?, multiple?}, rowSelector?, fastMode?}` | 200 `{id, status:"completed", resultUrl, summary{title, httpStatus, durationMs, rows, warnings}}`; 422 `{id, status:"failed", error}` when the scrape itself failed (job still recorded) | 400 `invalid_request`/`invalid_url`/`blocked_host`; 429 `rate_limited` + headers |
+| `POST /api/v2/scrape` | `{url, mode?=full, engine?=static, fields?[≤25]{name, selector, attribute, attrName?, multiple?}, rowSelector?, fastMode?}` | 200 `{id, status:"completed", resultUrl, summary{title, httpStatus, durationMs, rows, warnings}}`. When the scrape itself fails the job is still recorded and the body is `{id, status:"failed", error, code}` with the failure's status: 403 `robots`, 400 `blocked_host`, 504 `timeout`, 502 `http`/
+etwork`, 415 
+ot_html`, 429 `busy` (host politeness), else 422 `scrape_failed` | 400 `invalid_request`/`invalid_url` (incl. "Fields only" without usable fields — no job is recorded); 429 `rate_limited` + headers |
 | `GET /api/v2/preflight?url=` | — | `{url, host, robots, quota{minute{used,limit}, hour{…}}}` | 400, 429 |
 | `GET /api/v2/jobs?limit&offset&q&status` | — | `{jobs: Job[], total}` | 503 `migration_needed` |
 | `GET /api/v2/jobs/{id}` | — | `{job, result, logs}` | 404 `not_found` |

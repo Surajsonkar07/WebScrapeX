@@ -15,7 +15,9 @@ export const scrapeRules = () => [
 
 export class RateLimitedError extends Error {
     constructor(public limit: LimitResult) {
-        super(`Rate limit reached: ${limit.limit} scrapes per window. Try again in ${limit.retryAfter} s.`);
+        const per = (limit.windowMs ?? 60_000) >= 3_600_000 ? 'hour' : 'minute';
+        const wait = limit.retryAfter >= 120 ? `${Math.ceil(limit.retryAfter / 60)} min` : `${limit.retryAfter} s`;
+        super(`Rate limit reached: ${limit.limit} scrapes per ${per}. Try again in ${wait}.`);
     }
 }
 
@@ -23,6 +25,11 @@ export function parseScrapeRequest(body: unknown): ScrapeOptions {
     const req = scrapeRequestSchema.parse(body);
     const url = normalizeUrl(req.url).toString();
     const engine = req.fastMode === false ? 'rendered' : req.engine;
+    const usable = req.fields.filter((f) => f.name.trim() && (f.selector.trim() || req.rowSelector?.trim()));
+    if (req.mode === 'custom' && usable.length === 0) {
+        // Reject before a job is recorded: this is a request error, not a failed scrape.
+        throw new ScrapeError('“Fields only” needs at least one field with a column name and a CSS selector (or a row selector).', 'invalid_request', 400);
+    }
     return { url, mode: req.mode, engine, fields: req.fields, rowSelector: req.rowSelector };
 }
 
@@ -30,6 +37,9 @@ export interface JobOutcome {
     job: Job;
     result?: ScrapeResult;
     error?: string;
+    /** Machine-readable failure code and HTTP status (e.g. `robots` / 403). */
+    errorCode?: string;
+    errorStatus?: number;
     limit: LimitResult;
 }
 
@@ -53,6 +63,12 @@ export async function runJob(viewer: Pick<Viewer, 'id'>, options: ScrapeOptions,
         const message = e instanceof ScrapeError ? e.message : `Scrape failed: ${(e as Error).message}`;
         await log(message, 'error');
         await store.failJob(job, message).catch(() => undefined);
-        return { job: { ...job, status: 'failed', error: message }, error: message, limit };
+        return {
+            job: { ...job, status: 'failed', error: message },
+            error: message,
+            errorCode: e instanceof ScrapeError ? e.code : 'scrape_failed',
+            errorStatus: e instanceof ScrapeError ? e.status : 422,
+            limit,
+        };
     }
 }

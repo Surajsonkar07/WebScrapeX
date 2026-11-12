@@ -43,32 +43,40 @@ npm run typecheck
 
 ## Features
 
-v1 features are all kept (or replaced by a working version); v2 additions are marked **new**.
+Full requirements, user stories and acceptance criteria: [docs/PRD.md](docs/PRD.md). Technical design and traceability: [docs/TRD.md](docs/TRD.md).
 
-- [x] Scrape console: URL bar, five modes (Full audit, Content, Social, Design, Fields only) and two engines (static fetch, rendered Chrome with fallback)
-- [x] **new** CSS selector fields with a row selector, attribute picker and presets (Hacker News, article, product cards, links, headings, images)
-- [x] **new** Live pre-flight: robots.txt verdict, matching rule, crawl-delay and remaining quota while you type
-- [x] Server-side extraction: metadata, readable text (Readability), headings, **new** HTML tables, links (internal/external/social), images, colours, fonts, tech stack, SEO audit, Open Graph/Twitter, LinkedIn public profile fields
-- [x] Screenshot and PDF snapshot (rendered engine)
-- [x] Result page: data preview table with filter, overview, SEO dial and findings, content outline, links, design (swatches, fonts, image grid), raw HTML, job log
-- [x] Export JSON (with or without HTML) and **new** CSV per dataset (fields, each table, links, images, headings, metadata) — UTF-8 BOM, formula-injection safe
-- [x] Save a job's images to storage (robots.txt checked per image, 5 MB cap)
-- [x] Job history: search, status filter, pagination, delete, run again
-- [x] Rate limiting per account (minute + hour windows, `Retry-After` headers) and **new** per-host politeness (≥1 s, crawl-delay honoured)
-- [x] **new** robots.txt compliance (RFC 9309 longest-match, 15-minute cache) and SSRF protection (private IPs, redirects re-checked)
-- [x] Auth via Supabase: email + password, 6-digit email code sign-up (Mailjet), Google OAuth, forgot password, **new** reset-password page
-- [x] AI extraction with Gemini, now returns a table + CSV when the answer is a list (setup state when the key is missing)
-- [x] API access: **new** real API keys (hashed, revocable) replacing the v1 mock key; curl / JavaScript / Python / n8n examples; v1 `/api/v2/scrape` and `/api/scrape/content` still work
-- [x] Schedules: **new** working daily/weekly/monthly re-runs with webhooks and "Run now" (v1 modal only simulated this)
-- [x] Settings: theme, scrape defaults, usage, account
-- [x] Admin console: **new** gated by `ADMIN_EMAILS` and showing real stats (v1 used a hard-coded password)
-- [x] Health check `GET /api/health`
-- [x] Docs page, Ctrl+K command menu
-- [x] **new** Local mode with clear setup states when Supabase is not configured
-- [x] **new** PWA (installable, offline page), light/dark/system themes, mobile layout with bottom tab bar
+Status: **verified** = built and checked in a running production build (local mode, Nov 2026) · **done** = built, type-checked and lint-clean but not exercised end-to-end here · **blocked** = needs something only the owner can supply.
 
-Removed: the in-memory queue worker scripts and `/api/test` (development leftovers, no user-facing feature).
+| ID | Feature | Status |
+|---|---|---|
+| F-01 | Scrape console (URL bar, 5 modes, 2 engines, progress strip, recent runs) | verified |
+| F-02 | CSS selector fields, row selector, presets | verified (Hacker News preset: 30 rows) |
+| F-03 | Live pre-flight: robots.txt verdict, crawl-delay, quota meters | verified |
+| F-04 | Extraction: metadata, readable text, headings, data tables, links, images, SEO, social, colours, fonts, tech | verified (python.org full audit) |
+| F-05 | Rendered engine (headless Chrome) with screenshot + PDF, static fallback | verified with local Chrome; serverless Chromium not tested |
+| F-06 | Result page: readout strip, Data/Overview/SEO/Content/Links/Design/HTML/Log tabs | verified |
+| F-07 | Export JSON and CSV per dataset (UTF-8 BOM, formula-safe) | verified |
+| F-08 | Job history: search, status filter, pagination, delete, run again | verified |
+| F-09 | robots.txt compliance (RFC 9309) — 403 `robots` | verified (google.com/search blocked) |
+| F-10 | Rate limits per account (10/min, 100/h) + per-host politeness | verified (11th request → 429 + `Retry-After`) |
+| F-11 | SSRF protection, redirect re-checks, sandboxed file serving | verified (127.0.0.1 → 400 `blocked_host`) |
+| F-12 | Supabase auth: OTP sign-up, password login, Google, reset, sign-out, route guards | done — live sign-in not exercised (no test accounts were created on the real Supabase project) |
+| F-13 | Local mode + setup states; production requires explicit opt-in | verified |
+| F-14 | AI extraction (Gemini) with table + CSV | done; setup state verified — **blocked** for a live run until `GOOGLE_AI_API_KEY` is set |
+| F-15 | API keys (hashed, revocable) + HTTP API + v1 endpoints | verified for create/list; Bearer-key auth applies in Supabase mode only (done) |
+| F-16 | Schedules, webhooks, cron endpoint | verified (create, https-only webhook, Run now, cron 503 without secret); webhook delivery and cron need `CRON_SECRET` |
+| F-17 | Save images to storage | verified (2/2 python.org images, sandbox CSP) |
+| F-18 | Settings: theme, defaults, usage, account | verified |
+| F-19 | Admin console gated by `ADMIN_EMAILS` | verified in local mode; Supabase stats need the service-role key |
+| F-20 | Health check | verified |
+| F-21 | Docs page | verified |
+| F-22 | Ctrl/⌘+K command menu | verified |
+| F-23 | Light / dark / system theme | verified |
+| F-24 | Responsive layout, mobile tab bar, no horizontal scroll | verified at 375 px and 1024 px on every page |
+| F-25 | PWA: manifest, icons, service worker, offline page | verified (manifest + `sw.js` served); install prompt not tested on a phone |
+| F-26 | v1 data compatibility | done — needs the owner's existing Supabase data to verify |
 
+Removed from v1: the in-memory queue worker scripts and `/api/test` (development leftovers, no user-facing feature), the stealth browser plugin (bot-detection evasion), and the hard-coded admin password.
 ## HTTP API
 
 Send `Authorization: Bearer wsx_…` (create keys at `/api-access`) or a Supabase access token.

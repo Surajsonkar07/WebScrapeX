@@ -9,7 +9,12 @@ export const fieldSchema = z.object({
 });
 
 export const scrapeRequestSchema = z.object({
-    url: z.string().trim().min(3, 'Enter a URL').max(2048),
+    url: z
+        .string()
+        .trim()
+        .min(3, 'Enter a URL')
+        .max(2048)
+        .refine((v) => /^(https?:\/\/)?(localhost|[^\s/:?#]+\.[^\s/:?#]{2,})(:\d+)?([/?#]\S*)?$/i.test(v), 'Enter a full address like example.com/page'),
     mode: z.enum(['full', 'content', 'social', 'design', 'custom']).default('full'),
     engine: z.enum(['static', 'rendered']).default('static'),
     fields: z.array(fieldSchema).max(25).default([]),

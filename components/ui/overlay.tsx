@@ -93,7 +93,7 @@ export const Tabs = T.Root;
 export const TabsContent = T.Content;
 
 export function TabsList({ className, ...props }: React.ComponentProps<typeof T.List>) {
-    return <T.List className={cn('scroll-slim -mx-1 flex gap-1 overflow-x-auto border-b border-border px-1', className)} {...props} />;
+    return <T.List className={cn('-mx-1 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden', className)} {...props} />;
 }
 
 export function TabsTrigger({ className, ...props }: React.ComponentProps<typeof T.Trigger>) {

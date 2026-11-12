@@ -24,6 +24,7 @@ export async function POST(req: Request) {
             id: outcome.job.id,
             status: outcome.job.status,
             error: outcome.error,
+            code: outcome.errorCode,
             resultUrl: `/result/${outcome.job.id}`,
             summary: outcome.result
                 ? {
@@ -36,7 +37,8 @@ export async function POST(req: Request) {
                 : undefined,
             message: outcome.error ? undefined : 'Scrape completed',
         };
-        return json(body, { status: outcome.error ? 422 : 200, headers: limitHeaders(outcome.limit) });
+        // Failed scrapes are still recorded as jobs, so the body always carries the job id.
+        return json(body, { status: outcome.error ? (outcome.errorStatus ?? 422) : 200, headers: limitHeaders(outcome.limit) });
     } catch (e) {
         if (e instanceof RateLimitedError) {
             return json({ error: e.message, code: 'rate_limited', retryAfter: e.limit.retryAfter }, { status: 429, headers: limitHeaders(e.limit) });

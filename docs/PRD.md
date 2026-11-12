@@ -95,8 +95,8 @@ Each feature lists user stories and acceptance criteria (AC). AC are written to 
 ### F-06 Result page
 *As any user, I want a clear view of one run, so that I can check the data before exporting.*
 - AC1 Header: favicon, page title, final URL (opens in a new tab), and a readout strip with status, HTTP code, size, duration, mode·engine, capture time.
-- AC2 Tabs appear only when they have data: Data, Overview, SEO, Content, Links, Design, HTML, Log.
-- AC3 Data tab: switch between selector fields and each detected HTML table; filterable preview table that scrolls inside its frame; "show more" paging; Copy JSON; CSV for the active dataset.
+- AC2 Tabs appear only when they have data: Data, Overview, SEO, Content, Links, Design, HTML, Log. Runs with selector fields open on **Data**; audits open on **Overview** and list detected HTML tables under a **Tables** tab. One-row or one-column (layout) tables are ignored.
+- AC3 Data/Tables tab: switch between selector fields and each detected HTML table; filterable preview table that scrolls inside its frame; "show more" paging; Copy JSON; CSV for the active dataset.
 - AC4 Failed runs show the error and the Log tab.
 - AC5 A job still running (opened from elsewhere) auto-refreshes until it finishes.
 - AC6 Actions: Export, Run again, Schedule, Delete (with confirmation).

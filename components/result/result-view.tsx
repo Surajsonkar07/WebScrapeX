@@ -34,11 +34,14 @@ export function ResultView({ job, result, logs }: Props) {
     const datasets = useMemo(() => (result ? datasetsFor(result) : []), [result]);
     const tableSets = datasets.filter((d) => d.id === 'fields' || d.id.startsWith('table:'));
     const [activeSet, setActiveSet] = useState(tableSets[0]?.id ?? 'fields');
+    // Selector runs open on their data; audits open on the overview.
+    const firstTab = result?.fields?.rows.length ? 'data' : result ? 'overview' : 'log';
 
     const tabs = result
         ? [
-              tableSets.length && { id: 'data', label: 'Data', icon: Table2 },
-              { id: 'overview', label: 'Overview', icon: LayoutGrid },
+              ...(result.fields?.rows.length
+                  ? [{ id: 'data', label: 'Data', icon: Table2 }, { id: 'overview', label: 'Overview', icon: LayoutGrid }]
+                  : [{ id: 'overview', label: 'Overview', icon: LayoutGrid }, tableSets.length && { id: 'data', label: 'Tables', icon: Table2 }]),
               result.seo && { id: 'seo', label: 'SEO', icon: SearchCheck },
               (result.headings?.length || result.contentAnalysis?.cleanText) && { id: 'content', label: 'Content', icon: ListTree },
               result.links?.length && { id: 'links', label: 'Links', icon: Link2 },
@@ -91,7 +94,7 @@ export function ResultView({ job, result, logs }: Props) {
                     </Link>{' '}
                     / <span>{job.id.slice(0, 8)}</span>
                 </nav>
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                     <div className="flex min-w-0 gap-4">
                         <Favicon src={result?.metadata.favicon} />
                         <div className="min-w-0 space-y-1.5">
@@ -102,7 +105,7 @@ export function ResultView({ job, result, logs }: Props) {
                             </a>
                         </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex shrink-0 flex-wrap gap-2">
                         {result && (
                             <Menu>
                                 <MenuTrigger asChild>
@@ -160,7 +163,7 @@ export function ResultView({ job, result, logs }: Props) {
                 </div>
 
                 {/* Readout strip */}
-                <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3 lg:grid-cols-6">
+                <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3 xl:grid-cols-6">
                     <Readout label="status">
                         <span className={cn('font-medium', job.status === 'failed' ? 'text-danger' : job.status === 'completed' ? 'text-accent-ink' : 'text-primary-ink')}>{job.status}</span>
                     </Readout>
@@ -193,7 +196,7 @@ export function ResultView({ job, result, logs }: Props) {
                 </ul>
             ) : null}
 
-            <Tabs defaultValue={tabs[0].id}>
+            <Tabs defaultValue={firstTab}>
                 <TabsList aria-label="Result sections">
                     {tabs.map(({ id, label, icon: Icon }) => (
                         <TabsTrigger key={id} value={id}>
@@ -331,7 +334,19 @@ function Favicon({ src }: { src?: string }) {
         <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-card">
             {src && !broken ? (
                 // eslint-disable-next-line @next/next/no-img-element -- arbitrary third-party favicon
-                <img src={src} alt="" width={28} height={28} className="size-7 object-contain" referrerPolicy="no-referrer" onError={() => setBroken(true)} />
+                <img
+                    src={src}
+                    alt=""
+                    width={28}
+                    height={28}
+                    className="size-7 object-contain"
+                    referrerPolicy="no-referrer"
+                    onError={() => setBroken(true)}
+                    // The load may already have failed before hydration attached onError.
+                    ref={(el) => {
+                        if (el?.complete && el.naturalWidth === 0) setBroken(true);
+                    }}
+                />
             ) : (
                 <Link2 className="size-5 text-muted-foreground" />
             )}
@@ -346,13 +361,13 @@ function Overview({ result }: { result: ScrapeResult }) {
         <div className="grid gap-4 lg:grid-cols-3">
             <section className="panel space-y-4 p-5 lg:col-span-2">
                 <h3 className="label-mono">Metadata</h3>
-                <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[140px_1fr]">
+                <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[140px_minmax(0,1fr)] [&_dd]:min-w-0 [&_dd]:break-words">
                     <dt className="text-muted-foreground">Title</dt>
                     <dd>{result.metadata.title || '—'}</dd>
                     <dt className="text-muted-foreground">Description</dt>
                     <dd>{result.metadata.description || '—'}</dd>
                     <dt className="text-muted-foreground">Keywords</dt>
-                    <dd className="flex flex-wrap gap-1.5">{result.metadata.keywords.length ? result.metadata.keywords.slice(0, 20).map((k) => <Badge key={k}>{k}</Badge>) : '—'}</dd>
+                    <dd className="flex flex-wrap gap-1.5">{result.metadata.keywords.length ? result.metadata.keywords.slice(0, 20).map((k) => <Badge key={k} className="max-w-full truncate" title={k}>{k}</Badge>) : '—'}</dd>
                     <dt className="text-muted-foreground">Language</dt>
                     <dd className="font-mono text-[13px]">{result.metadata.lang ?? '—'}</dd>
                     <dt className="text-muted-foreground">Canonical</dt>

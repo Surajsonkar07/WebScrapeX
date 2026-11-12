@@ -12,7 +12,7 @@ import { extractLinkedInProfile } from '@/lib/extractors/linkedin';
 import { auditSEO } from '@/lib/extractors/seo';
 import { checkRobots } from './robots';
 import { politeSlot } from './rate-limit';
-import { normalizeUrl, safeFetchText, ScrapeError } from './safe-fetch';
+import { assertPublicHost, normalizeUrl, safeFetchText, ScrapeError } from './safe-fetch';
 import { extractTables, runFieldSelectors } from './selectors';
 import { renderPage } from './browser';
 
@@ -35,6 +35,9 @@ export async function runScrape(input: ScrapeOptions, log: LogFn): Promise<Engin
     if (mode === 'custom' && fields.length === 0) {
         throw new ScrapeError('Custom mode needs at least one field with a name and a CSS selector.', 'invalid_url');
     }
+
+    // 0. Refuse private/local targets before touching the network at all.
+    await assertPublicHost(url);
 
     // 1. robots.txt
     await log(`Checking ${url.origin}/robots.txt`);

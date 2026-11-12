@@ -1,4 +1,8 @@
 import Link from 'next/link';
+
+// Render per request so the sign-in screens reflect the server's current mode
+// (Supabase / local / not set up) rather than whatever it was at build time.
+export const dynamic = 'force-dynamic';
 import { Logo } from '@/components/brand';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
 
@@ -44,20 +48,20 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                             <span className="text-[oklch(0.75_0.012_255)]">news.ycombinator.com</span>
                             <span className="ml-auto text-[oklch(0.8_0.14_162)]">200 · 31 rows · 0.8 s</span>
                         </div>
-                        <table className="w-full font-mono text-[12px]">
+                        <table className="w-full table-fixed font-mono text-[12px]">
                             <thead>
                                 <tr className="text-left text-[oklch(0.6_0.012_255)]">
-                                    <th className="px-4 py-2 font-normal">rank</th>
+                                    <th className="w-14 px-4 py-2 font-normal">rank</th>
                                     <th className="px-2 py-2 font-normal">title</th>
-                                    <th className="px-4 py-2 font-normal">site</th>
+                                    <th className="w-40 px-4 py-2 font-normal">site</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {SAMPLE.map(([r, t, s]) => (
                                     <tr key={r} className="border-t border-[oklch(1_0_0/0.06)]">
                                         <td className="px-4 py-2 text-[oklch(0.6_0.012_255)]">{r}</td>
-                                        <td className="max-w-[260px] truncate px-2 py-2">{t}</td>
-                                        <td className="px-4 py-2 text-[oklch(0.75_0.012_255)]">{s}</td>
+                                        <td className="truncate px-2 py-2">{t}</td>
+                                        <td className="truncate px-4 py-2 text-[oklch(0.75_0.012_255)]">{s}</td>
                                     </tr>
                                 ))}
                             </tbody>

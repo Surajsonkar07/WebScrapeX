@@ -6,7 +6,7 @@ import { env } from '@/lib/env';
 export class ScrapeError extends Error {
     constructor(
         message: string,
-        public code: 'invalid_url' | 'blocked_host' | 'robots' | 'http' | 'timeout' | 'too_large' | 'not_html' | 'busy' | 'network',
+        public code: 'invalid_url' | 'invalid_request' | 'blocked_host' | 'robots' | 'http' | 'timeout' | 'too_large' | 'not_html' | 'busy' | 'network',
         public status = 400,
     ) {
         super(message);

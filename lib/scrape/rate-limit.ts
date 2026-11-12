@@ -26,6 +26,8 @@ export interface LimitRule {
 export interface LimitResult {
     allowed: boolean;
     limit: number;
+    /** Window of the rule that decided the result. */
+    windowMs?: number;
     remaining: number;
     /** Seconds until the next request is allowed. */
     retryAfter: number;
@@ -52,7 +54,7 @@ export function take(key: string, rules: LimitRule[]): LimitResult {
     if (blocked.length) {
         const worst = blocked.reduce((a, b) => (b.retryAfter > a.retryAfter ? b : a));
         buckets.set(key, w);
-        return { allowed: false, limit: worst.rule.limit, remaining: 0, retryAfter: Math.max(1, worst.retryAfter) };
+        return { allowed: false, limit: worst.rule.limit, windowMs: worst.rule.windowMs, remaining: 0, retryAfter: Math.max(1, worst.retryAfter) };
     }
 
     w.hits.push(now);

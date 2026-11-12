@@ -100,7 +100,8 @@ export function extractTables($: CheerioAPI, limit = 6): DataTable[] {
             }
         }
         const width = Math.max(headers.length, ...bodyRows.map((r) => $(r).find('th,td').length), 0);
-        if (!width || !bodyRows.length) return;
+        // Skip layout tables (one row or one column): they are page structure, not data.
+        if (width < 2 || bodyRows.length < 2) return;
         const columns = Array.from({ length: width }, (_, k) => headers[k] || `Column ${k + 1}`);
         const unique = columns.map((c, k) => (columns.indexOf(c) === k ? c : `${c} (${k + 1})`));
         const rows = bodyRows.slice(0, 500).map((r) => {
