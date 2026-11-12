@@ -1,151 +1,46 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { scrapeWebsite } from '@/lib/scraper';
-import crypto from 'crypto';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { cache } from '@/lib/cache';
-import { rateLimiter } from '@/lib/rateLimiter';
-import { withRetry } from '@/lib/retry';
+import { getViewer } from '@/lib/auth';
+import { apiError, json, unauthorized } from '@/lib/http';
+import { limitHeaders } from '@/lib/scrape/rate-limit';
+import { parseScrapeRequest, RateLimitedError, runJob } from '@/lib/scrape/run-job';
 
 export const runtime = 'nodejs';
-
-export async function GET() {
-    return NextResponse.json({ status: 'API V2 is running' });
-}
-
-// Max duration for Vercel Serverless Functions (seconds)
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
-    console.log('>>> CAPTURE API V2 HIT');
+export function GET() {
+    return json({
+        status: 'ok',
+        usage: 'POST { url, mode?: full|content|social|design|custom, engine?: static|rendered, fields?: [{ name, selector, attribute }], rowSelector? }',
+    });
+}
 
-    // Identify user from server-side session
-    const cookieStore = await cookies();
-    console.log('>>> V2 Cookies:', cookieStore.getAll().map(c => c.name));
-
-    const supabaseAuth = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                get(name: string) {
-                    return cookieStore.get(name)?.value;
-                },
-                set(name: string, value: string, options: any) {
-                    try {
-                        cookieStore.set({ name, value, ...options });
-                    } catch (e) {
-                        // Handle case where we can't set cookies in this context
-                    }
-                },
-                remove(name: string, options: any) {
-                    try {
-                        cookieStore.set({ name, value: '', ...options });
-                    } catch (e) {
-                        // Handle case where we can't set cookies in this context
-                    }
-                },
-            },
-        }
-    );
-
-    let { data: { session } } = await supabaseAuth.auth.getSession();
-    console.log('>>> V2 Session User (Cookie):', session?.user?.email);
-
-    // Fallback to Header Auth if cookie failed
-    if (!session) {
-        const authHeader = req.headers.get('authorization');
-        if (authHeader) {
-            const token = authHeader.replace('Bearer ', '');
-            const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
-            if (user && !error) {
-                console.log('>>> V2 Session User (Header):', user.email);
-                // Mock a session object since we have a user
-                session = { user } as any;
-            }
-        }
-    }
-
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 });
-    }
-
+export async function POST(req: Request) {
     try {
-        const body = await req.json().catch(() => ({}));
-        const { url, mode = 'full', fastMode = true } = body;
-
-        if (!url) {
-            return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+        const viewer = await getViewer();
+        if (!viewer) return unauthorized();
+        const options = parseScrapeRequest(await req.json().catch(() => ({})));
+        const outcome = await runJob(viewer, options);
+        const body = {
+            id: outcome.job.id,
+            status: outcome.job.status,
+            error: outcome.error,
+            resultUrl: `/result/${outcome.job.id}`,
+            summary: outcome.result
+                ? {
+                      title: outcome.result.metadata.title,
+                      httpStatus: outcome.result.fetch.status,
+                      durationMs: outcome.result.fetch.durationMs,
+                      rows: outcome.result.fields?.rows.length ?? null,
+                      warnings: outcome.result.warnings,
+                  }
+                : undefined,
+            message: outcome.error ? undefined : 'Scrape completed',
+        };
+        return json(body, { status: outcome.error ? 422 : 200, headers: limitHeaders(outcome.limit) });
+    } catch (e) {
+        if (e instanceof RateLimitedError) {
+            return json({ error: e.message, code: 'rate_limited', retryAfter: e.limit.retryAfter }, { status: 429, headers: limitHeaders(e.limit) });
         }
-
-        // Rate limiting
-        const rateLimitKey = `scrape:${session.user.id}`;
-        const rateLimit = rateLimiter.check(rateLimitKey, 10, 60000); // 10 requests per minute
-        
-        if (!rateLimit.allowed) {
-            return NextResponse.json(
-                { 
-                    error: 'Rate limit exceeded',
-                    remaining: rateLimit.remaining,
-                    resetTime: new Date(rateLimit.resetTime).toISOString()
-                },
-                { 
-                    status: 429,
-                    headers: {
-                        'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-                        'X-RateLimit-Reset': rateLimit.resetTime.toString()
-                    }
-                }
-            );
-        }
-
-        // Generate ID manually (bypass schema select)
-        const id = crypto.randomUUID();
-
-        // Use AUTHENTICATED client to insert (ensures RLS respects user_id)
-        const { error } = await supabaseAuth
-            .from('websites')
-            .insert({
-                id,
-                url,
-                status: 'pending',
-                user_id: session.user.id
-            });
-
-        if (error) {
-            console.error('DB Error V2:', error);
-            return NextResponse.json({ error: 'Database failed', details: error.message }, { status: 500 });
-        }
-
-        // Await scraper to prevent Vercel from freezing the process
-        // This ensures data exists before we return
-        try {
-            // VERCEL OPTIMIZATION:
-            // We set skipDownloads=true to perform FAST discovery (5-10s)
-            // The frontend will then call /api/v2/scrape/assets to trigger background downloads
-            // If mode is social/content, we can be even faster
-            
-            // Use retry logic for scraping
-            await withRetry(
-                () => scrapeWebsite(id, url, true, fastMode, mode),
-                {
-                    maxRetries: 2,
-                    baseDelay: 2000,
-                    maxDelay: 10000
-                }
-            );
-        } catch (err) {
-            console.error('Scraper V2 Error:', err);
-            // We still return 200 if DB insert worked, but status will be 'failed' 
-            // The UI handles 'failed' status via polling or checks
-        }
-
-        return NextResponse.json({ id, message: 'Scrape initiated via v2' });
-
-    } catch (error: any) {
-        console.error('API V2 Fatal Error:', error);
-        return NextResponse.json({ error: 'Process failed', details: error.message }, { status: 500 });
+        return apiError(e);
     }
 }

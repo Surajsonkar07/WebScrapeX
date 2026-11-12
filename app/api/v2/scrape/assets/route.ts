@@ -1,62 +1,66 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { downloadAssets } from '@/lib/scraper';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+import { getViewer } from '@/lib/auth';
+import { apiError, json, unauthorized } from '@/lib/http';
+import { limitHeaders, take } from '@/lib/scrape/rate-limit';
+import { checkRobots } from '@/lib/scrape/robots';
+import { assertPublicHost } from '@/lib/scrape/safe-fetch';
+import { env } from '@/lib/env';
+import { getStore } from '@/lib/store';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // Max allowed for downloading
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
-    const cookieStore = await cookies();
-    const supabaseAuth = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                get(name: string) { return cookieStore.get(name)?.value; },
-                set(name: string, value: string, options: any) { try { cookieStore.set({ name, value, ...options }); } catch (e) { } },
-                remove(name: string, options: any) { try { cookieStore.set({ name, value: '', ...options }); } catch (e) { } },
-            },
-        }
-    );
+const body = z.object({ id: z.string().min(1), urls: z.array(z.string().url()).max(200).optional() });
 
-    let { data: { session } } = await supabaseAuth.auth.getSession();
-    if (!session) {
-        // Fallback Header Auth
-        const authHeader = req.headers.get('authorization');
-        if (authHeader) {
-            const token = authHeader.replace('Bearer ', '');
-            const { data: { user } } = await supabaseAuth.auth.getUser(token);
-            if (user) session = { user } as any;
-        }
-    }
+const EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/avif': 'avif', 'image/svg+xml': 'svg', 'image/x-icon': 'ico', 'image/vnd.microsoft.icon': 'ico' };
 
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+/** Copies a job's images into storage (max 40, 5 MB each), honouring robots.txt per image. */
+export async function POST(req: Request) {
     try {
-        const body = await req.json();
-        const { id, urls, url: referer } = body;
+        const viewer = await getViewer();
+        if (!viewer) return unauthorized();
+        const limit = take(`assets:${viewer.id}`, [{ limit: 5, windowMs: 60_000 }]);
+        if (!limit.allowed) return json({ error: `Asset downloads are limited to 5 per minute. Try again in ${limit.retryAfter} s.`, code: 'rate_limited' }, { status: 429, headers: limitHeaders(limit) });
 
-        if (!id || !urls || !Array.isArray(urls)) {
-            return NextResponse.json({ error: 'Missing id or urls array' }, { status: 400 });
-        }
+        const { id, urls } = body.parse(await req.json());
+        const store = getStore();
+        const result = await store.getResult(viewer.id, id);
+        if (!result) return json({ error: 'Job not found', code: 'not_found' }, 404);
 
-        console.log(`[${id}] Starting asset download for ${urls.length} items...`);
+        const known = new Set((result.images ?? []).map((i) => i.url));
+        const targets = (urls ?? [...known]).filter((u) => known.has(u)).slice(0, 40);
+        const saved: string[] = [];
+        const skipped: Array<{ url: string; reason: string }> = [];
 
-        // Run the download process
-        // Note: we pass the AUTHENTICATED client so RLS works
-        const downloaded = await downloadAssets(id, urls, referer || '', supabaseAuth);
+        await Promise.all(
+            targets.map(async (u) => {
+                try {
+                    const url = new URL(u);
+                    if (!/^https?:$/.test(url.protocol)) throw new Error('not http');
+                    await assertPublicHost(url);
+                    const robots = await checkRobots(url);
+                    if (!robots.allowed) throw new Error(`robots.txt: ${robots.matchedRule ?? 'disallowed'}`);
+                    const res = await fetch(url, { headers: { 'User-Agent': env.userAgent, Referer: result.url }, signal: AbortSignal.timeout(10_000), redirect: 'error' });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const type = (res.headers.get('content-type') ?? '').split(';')[0].trim();
+                    const ext = EXT[type];
+                    if (!ext) throw new Error(`not an image (${type || 'unknown type'})`);
+                    const buf = Buffer.from(await res.arrayBuffer());
+                    if (buf.byteLength > 5_000_000) throw new Error('larger than 5 MB');
+                    const name = `assets/${randomUUID().slice(0, 8)}-${(url.pathname.split('/').pop() || 'image').replace(/\.[a-z0-9]+$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40)}.${ext}`;
+                    if (await store.putFile(id, name, buf, type)) saved.push(`/api/v2/jobs/${id}/files/${name}`);
+                    else throw new Error('storage rejected the file');
+                } catch (e) {
+                    skipped.push({ url: u, reason: (e as Error).message });
+                }
+            }),
+        );
 
-        return NextResponse.json({
-            success: true,
-            downloadedCount: downloaded.length,
-            totalRequested: urls.length
-        });
-
-    } catch (error: any) {
-        console.error('Asset Download Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        await store.log(id, `Saved ${saved.length} of ${targets.length} images to storage`, saved.length ? 'success' : 'warning').catch(() => undefined);
+        return json({ success: true, downloadedCount: saved.length, totalRequested: targets.length, files: saved, skipped });
+    } catch (e) {
+        return apiError(e);
     }
 }

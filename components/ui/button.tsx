@@ -1,62 +1,39 @@
-import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
-import { cva, type VariantProps } from "class-variance-authority"
+import * as React from 'react';
+import { Slot } from 'radix-ui';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '@/lib/utils';
 
-import { cn } from "@/lib/utils"
+export const buttonVariants = cva(
+    'relative inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-[background-color,border-color,color,transform,box-shadow] duration-150 ease-out active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
+    {
+        variants: {
+            variant: {
+                primary:
+                    'bg-primary text-primary-foreground shadow-[inset_0_-2px_0_oklch(0_0_0/0.14)] hover:brightness-[1.04] hover:shadow-[inset_0_-2px_0_oklch(0_0_0/0.2)]',
+                secondary: 'border border-border-strong bg-card text-foreground hover:bg-muted',
+                ghost: 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                outline: 'border border-border bg-transparent hover:border-border-strong hover:bg-muted/60',
+                danger: 'border border-transparent bg-danger-soft text-danger hover:border-danger/40',
+                link: 'h-auto px-0 text-primary-ink underline-offset-4 hover:underline',
+            },
+            size: {
+                sm: 'h-9 px-3 text-[13px]',
+                md: 'h-10 px-4 text-sm',
+                lg: 'h-12 px-5 text-[15px]',
+                icon: 'size-10',
+                'icon-sm': 'size-9',
+            },
+        },
+        defaultVariants: { variant: 'primary', size: 'md' },
+    },
+);
 
-// If radix-ui slot/cva not installed, we can simplify, but standard is using them.
-// I didn't install class-variance-authority or radix-ui slot in the first pass... 
-// I should have. The prompt implies "ShadCN UI" which usually implies these deps.
-// I will implement a simpler version without CVA/Slot if I can't guarantee deps, 
-// OR I'll implicitly rely on installing them.
-// Safest is to just use standard props and template literals if I missed those deps.
-// BUT, I'll assume I can install them or just use a simpler implementation.
-// Let's do a Simpler Version to avoid "Module not found" if I forgot to install them.
-// (I only installed clsx, tailwind-merge).
-
-// SIMPLIFIED BUTTON (No CVA/Slot dependency to be safe)
-
-export interface ButtonProps
-    extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-    variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
-    size?: 'default' | 'sm' | 'lg' | 'icon'
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+    asChild?: boolean;
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-    ({ className, variant = 'default', size = 'default', ...props }, ref) => {
-
-        // Variant styles
-        const variants = {
-            default: "bg-primary text-primary-foreground hover:bg-primary/90",
-            destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-            outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-            secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-            ghost: "hover:bg-accent hover:text-accent-foreground",
-            link: "text-primary underline-offset-4 hover:underline",
-        }
-
-        // Size styles
-        const sizes = {
-            default: "h-10 px-4 py-2",
-            sm: "h-9 rounded-md px-3",
-            lg: "h-11 rounded-md px-8",
-            icon: "h-10 w-10",
-        }
-
-        return (
-            <button
-                className={cn(
-                    "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-                    variants[variant],
-                    sizes[size],
-                    className
-                )}
-                ref={ref}
-                {...props}
-            />
-        )
-    }
-)
-Button.displayName = "Button"
-
-export { Button }
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, asChild, ...props }, ref) => {
+    const Comp = asChild ? Slot.Root : 'button';
+    return <Comp ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+});
+Button.displayName = 'Button';

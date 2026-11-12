@@ -1,24 +1,7 @@
-import { MetadataRoute } from 'next'
+import type { MetadataRoute } from 'next';
+
+const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-    return [
-        {
-            url: 'https://webscrapex.com',
-            lastModified: new Date(),
-            changeFrequency: 'daily',
-            priority: 1,
-        },
-        {
-            url: 'https://webscrapex.com/api-access',
-            lastModified: new Date(),
-            changeFrequency: 'weekly',
-            priority: 0.8,
-        },
-        {
-            url: 'https://webscrapex.com/settings',
-            lastModified: new Date(),
-            changeFrequency: 'monthly',
-            priority: 0.5,
-        },
-    ]
+    return ['/login', '/signup', '/docs'].map((p) => ({ url: `${base}${p}`, changeFrequency: 'monthly', priority: p === '/docs' ? 0.8 : 0.6 }));
 }

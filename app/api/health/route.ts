@@ -1,77 +1,33 @@
-import { NextResponse } from 'next/server';
-import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { env, supabaseEnabled } from '@/lib/env';
+import { supabaseAdmin } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-    try {
-        const startTime = Date.now();
-        
-        // Test database connectivity
-        const { error: dbError } = await supabase
-            .from('websites')
-            .select('id')
-            .limit(1);
-        
-        if (dbError) {
-            throw new Error(`Database error: ${dbError.message}`);
-        }
-        
-        // Test storage connectivity if admin client available
-        let storageHealthy = true;
-        if (supabaseAdmin) {
-            try {
-                const { error: storageError } = await supabaseAdmin.storage
-                    .from('scrapes')
-                    .list('', { limit: 1 });
-                
-                if (storageError) {
-                    storageHealthy = false;
-                }
-            } catch (e) {
-                storageHealthy = false;
-            }
-        }
-        
-        const responseTime = Date.now() - startTime;
-        
-        const health = {
-            status: 'healthy',
-            timestamp: new Date().toISOString(),
-            uptime: process.uptime(),
-            responseTime: `${responseTime}ms`,
-            services: {
-                database: 'healthy',
-                storage: storageHealthy ? 'healthy' : 'degraded'
-            },
-            environment: process.env.NODE_ENV || 'development',
-            version: process.env.npm_package_version || 'unknown'
-        };
-        
-        return NextResponse.json(health, {
-            headers: {
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            }
-        });
-        
-    } catch (error) {
-        const health = {
-            status: 'unhealthy',
-            timestamp: new Date().toISOString(),
-            error: error instanceof Error ? error.message : 'Unknown error',
-            services: {
-                database: 'unknown',
-                storage: 'unknown'
-            }
-        };
-        
-        return NextResponse.json(health, {
-            status: 503,
-            headers: {
-                'Cache-Control': 'no-cache, no-store, must-revalidate'
-            }
-        });
+    const started = Date.now();
+    const checks: Record<string, 'ok' | 'error' | 'skipped'> = { app: 'ok', database: 'skipped', storage: 'skipped' };
+
+    const admin = supabaseAdmin();
+    if (supabaseEnabled && admin) {
+        const [db, storage] = await Promise.all([
+            admin.from('websites').select('id', { head: true, count: 'exact' }).limit(1),
+            admin.storage.from('scrapes').list('', { limit: 1 }),
+        ]);
+        checks.database = db.error ? 'error' : 'ok';
+        checks.storage = storage.error ? 'error' : 'ok';
     }
+
+    const healthy = !Object.values(checks).includes('error');
+    return Response.json(
+        {
+            status: healthy ? 'healthy' : 'degraded',
+            mode: supabaseEnabled ? 'supabase' : 'local',
+            checks,
+            features: { ai: !!env.googleAiKey, schedules: !!env.cronSecret, renderedEngine: !!(env.browserWs || env.chromePath) || !env.isServerless },
+            responseTimeMs: Date.now() - started,
+            timestamp: new Date().toISOString(),
+        },
+        { status: healthy ? 200 : 503, headers: { 'Cache-Control': 'no-store' } },
+    );
 }

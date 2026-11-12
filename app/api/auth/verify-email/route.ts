@@ -1,104 +1,43 @@
-import { NextRequest, NextResponse } from "next/server";
-import { emailToUuid } from "@/lib/auth-utils";
-import { supabaseAdmin, supabase } from "@/lib/supabase";
+import { z } from 'zod';
+import { emailToUuid } from '@/lib/auth-utils';
+import { apiError, json } from '@/lib/http';
+import { take } from '@/lib/scrape/rate-limit';
+import { supabaseAdmin } from '@/lib/supabase/server';
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { email, code, password, fullName } = body;
+export const runtime = 'nodejs';
 
-    if (!email || !code || !password) {
-      return NextResponse.json(
-        { error: "Email, verification code, and password are required." },
-        { status: 400 }
-      );
+const body = z.object({
+    email: z.string().trim().toLowerCase().email(),
+    code: z.string().trim().regex(/^\d{6}$/, 'The code has 6 digits'),
+    password: z.string().min(8, 'Use at least 8 characters').max(128),
+    fullName: z.string().trim().max(80).optional(),
+});
+
+/** Verifies the 6-digit code, then creates the confirmed Supabase user. No user exists before this succeeds. */
+export async function POST(req: Request) {
+    try {
+        const admin = supabaseAdmin();
+        if (!admin) return json({ error: 'Sign-up needs SUPABASE_SERVICE_ROLE_KEY on the server.', code: 'not_configured' }, 503);
+        const { email, code, password, fullName } = body.parse(await req.json());
+
+        const limit = take(`verify:${email}`, [{ limit: 8, windowMs: 15 * 60_000 }]);
+        if (!limit.allowed) return json({ error: 'Too many attempts. Request a new code in a few minutes.', code: 'rate_limited' }, 429);
+
+        const userId = emailToUuid(email);
+        const { data: token } = await admin.from('verification_tokens').select('id,expires_at').eq('user_id', userId).eq('token', code).maybeSingle();
+        if (!token) return json({ error: 'That code is not right. Check the email or request a new one.', code: 'invalid_code' }, 400);
+        if (Date.now() > Date.parse((token as { expires_at: string }).expires_at)) {
+            await admin.from('verification_tokens').delete().eq('user_id', userId);
+            return json({ error: 'The code has expired. Request a new one.', code: 'expired' }, 400);
+        }
+
+        const { data: created, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: fullName ?? null } });
+        if (error || !created.user) return json({ error: error?.message ?? 'Could not create the account.', code: 'create_failed' }, 400);
+
+        await admin.from('profiles').upsert({ id: created.user.id, full_name: fullName ?? null, email, verified: true, updated_at: new Date().toISOString() });
+        await admin.from('verification_tokens').delete().eq('user_id', userId);
+        return json({ success: true, user: { id: created.user.id, email } });
+    } catch (e) {
+        return apiError(e);
     }
-
-    const cleanEmail = email.toLowerCase().trim();
-    const userId = emailToUuid(cleanEmail);
-    const dbClient: any = supabaseAdmin || supabase;
-
-    // 1. Look up public.verification_tokens where user_id = emailToUuid(email) AND token = code
-    const { data: tokenRecord, error: tokenError } = await dbClient
-      .from("verification_tokens")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("token", code.trim())
-      .maybeSingle();
-
-    if (tokenError || !tokenRecord) {
-      // Zero user records are created if verification fails
-      return NextResponse.json(
-        { error: "Invalid or expired verification code." },
-        { status: 400 }
-      );
-    }
-
-    // 2. Check token expiration
-    const expiresAt = new Date(tokenRecord.expires_at).getTime();
-    if (Date.now() > expiresAt) {
-      // Clean up expired token
-      await dbClient.from("verification_tokens").delete().eq("id", tokenRecord.id);
-      return NextResponse.json(
-        { error: "Verification code has expired. Please request a new code." },
-        { status: 400 }
-      );
-    }
-
-    // 3. Admin Client Check (Service Role Key required for deferred user creation)
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { error: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is required for pre-signup verification." },
-        { status: 500 }
-      );
-    }
-
-    // 4. Create user in Supabase Auth using Service Role client
-    const { data: authUser, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
-      email: cleanEmail,
-      password: password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: fullName,
-      },
-    });
-
-    if (createUserError || !authUser.user) {
-      console.error("Error creating user in Supabase Auth:", createUserError);
-      return NextResponse.json(
-        { error: createUserError?.message || "Failed to create user account." },
-        { status: 400 }
-      );
-    }
-
-    const newUserId = authUser.user.id;
-
-    // 5. Upsert into public.profiles
-    const { error: profileError } = await (supabaseAdmin as any).from("profiles").upsert({
-      id: newUserId,
-      full_name: fullName || null,
-      email: cleanEmail,
-      verified: true,
-      updated_at: new Date().toISOString(),
-    });
-
-    if (profileError) {
-      console.warn("Profile upsert warning:", profileError.message);
-    }
-
-    // 6. Delete used token from verification_tokens
-    await dbClient.from("verification_tokens").delete().eq("user_id", userId);
-
-    return NextResponse.json({
-      success: true,
-      message: "Email verified and account created successfully.",
-      user: {
-        id: newUserId,
-        email: cleanEmail,
-      },
-    });
-  } catch (err: any) {
-    console.error("Error in /api/auth/verify-email:", err);
-    return NextResponse.json({ error: err.message || "Internal server error." }, { status: 500 });
-  }
 }

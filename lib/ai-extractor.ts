@@ -1,39 +1,44 @@
+import 'server-only';
+import * as cheerio from 'cheerio';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { env } from '@/lib/env';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
+/** Strips markup to readable text plus link/image hints so the prompt stays small. */
+function condense(html: string): string {
+    const $ = cheerio.load(html);
+    $('script,style,noscript,svg,iframe,template').remove();
+    $('a[href]').each((_, a) => {
+        $(a).append(` [${$(a).attr('href')}]`);
+    });
+    $('img[src]').each((_, img) => {
+        $(img).replaceWith(` [image: ${$(img).attr('alt') ?? ''} ${$(img).attr('src')}] `);
+    });
+    return $('body').text().replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, 60_000);
+}
 
-export async function extractWithAI(html: string, prompt: string) {
-  if (!process.env.GOOGLE_AI_API_KEY) {
-    throw new Error('GOOGLE_AI_API_KEY is not configured');
-  }
+export async function extractWithAI(html: string, prompt: string, pageUrl: string): Promise<unknown> {
+    if (!env.googleAiKey) throw new Error('AI extraction is not set up: add GOOGLE_AI_API_KEY to the server environment.');
+    const model = new GoogleGenerativeAI(env.googleAiKey).getGenerativeModel({
+        model: env.geminiModel,
+        generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
+    });
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const text = condense(html);
+    const request = [
+        'You extract structured data from a web page.',
+        'Return only JSON. Prefer an array of objects with consistent keys when the request asks for a list.',
+        'Use null for values that are not present on the page. Never invent data.',
+        `Page URL: ${pageUrl}`,
+        `Request: ${prompt}`,
+        '--- PAGE TEXT ---',
+        text,
+    ].join('\n');
 
-  // Clean HTML to save tokens
-  const cleanHtml = html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-    .substring(0, 50000); // Limit to 50k characters for safety
-
-  const fullPrompt = `
-    You are an expert web scraper. Extract data from the following HTML content based on this request: "${prompt}".
-    Return ONLY a valid JSON object. Do not include any markdown formatting like \`\`\`json or explanations.
-    
-    HTML Content:
-    ${cleanHtml}
-  `;
-
-  try {
-    const result = await model.generateContent(fullPrompt);
-    const response = await result.response;
-    let text = response.text();
-    
-    // Clean up response if it contains markdown code blocks
-    text = text.replace(/```json\n?/, '').replace(/\n?```/, '').trim();
-    
-    return JSON.parse(text);
-  } catch (error: any) {
-    console.error('AI Extraction Error:', error);
-    throw new Error(`AI Extraction failed: ${error.message}`);
-  }
+    const res = await model.generateContent(request);
+    const raw = res.response.text().replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+    try {
+        return JSON.parse(raw);
+    } catch {
+        throw new Error('The AI model returned something that is not valid JSON. Try a more specific request.');
+    }
 }

@@ -1,73 +1,44 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { z } from 'zod';
 import { extractWithAI } from '@/lib/ai-extractor';
-import { rateLimiter } from '@/lib/rateLimiter';
+import { getViewer } from '@/lib/auth';
+import { env } from '@/lib/env';
+import { apiError, json, unauthorized } from '@/lib/http';
+import { limitHeaders, politeSlot, take } from '@/lib/scrape/rate-limit';
+import { checkRobots } from '@/lib/scrape/robots';
+import { normalizeUrl, safeFetchText, ScrapeError } from '@/lib/scrape/safe-fetch';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
-  const cookieStore = await cookies();
-  const supabaseAuth = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) { return cookieStore.get(name)?.value; },
-        set(name: string, value: string, options: any) { cookieStore.set({ name, value, ...options }); },
-        remove(name: string, options: any) { cookieStore.set({ name, value: '', ...options }); },
-      },
+const body = z.object({ url: z.string().min(3).max(2048), prompt: z.string().trim().min(4, 'Describe what to extract').max(1000) });
+
+export async function POST(req: Request) {
+    try {
+        const viewer = await getViewer();
+        if (!viewer) return unauthorized();
+        if (!env.googleAiKey) {
+            return json({ error: 'AI extraction is not set up. Add GOOGLE_AI_API_KEY to the server environment.', code: 'not_configured' }, 503);
+        }
+        const limit = take(`ai:${viewer.id}`, [{ limit: 5, windowMs: 60_000 }, { limit: 40, windowMs: 3_600_000 }]);
+        if (!limit.allowed) {
+            return json({ error: `AI extraction is limited to 5 requests per minute. Try again in ${limit.retryAfter} s.`, code: 'rate_limited' }, { status: 429, headers: limitHeaders(limit) });
+        }
+
+        const input = body.parse(await req.json());
+        const url = normalizeUrl(input.url);
+        const robots = await checkRobots(url);
+        if (!robots.allowed) throw new ScrapeError(`robots.txt does not allow fetching this page (${robots.matchedRule ?? 'Disallow'}).`, 'robots', 403);
+        if (!(await politeSlot(url.host, Math.max(1000, (robots.crawlDelay ?? 0) * 1000)))) {
+            throw new ScrapeError(`Too many requests to ${url.host} right now.`, 'busy', 429);
+        }
+        const page = await safeFetchText(url);
+        if (page.status >= 400) throw new ScrapeError(`${url.host} answered HTTP ${page.status}.`, 'http', 502);
+
+        const started = Date.now();
+        const data = await extractWithAI(page.body, input.prompt, page.finalUrl);
+        return json({ success: true, data, url: page.finalUrl, prompt: input.prompt, model: env.geminiModel, durationMs: Date.now() - started }, { headers: limitHeaders(limit) });
+    } catch (e) {
+        return apiError(e);
     }
-  );
-
-  const { data: { session } } = await supabaseAuth.auth.getSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  try {
-    const { url, prompt } = await req.json();
-
-    if (!url || !prompt) {
-      return NextResponse.json({ error: 'URL and Prompt are required' }, { status: 400 });
-    }
-
-    // Rate limiting
-    const rateLimit = rateLimiter.check(`ai-scrape:${session.user.id}`, 5, 60000); // 5 AI requests per minute
-    if (!rateLimit.allowed) {
-      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
-    }
-
-    // 1. Fetch HTML (Fast Mode)
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch URL: ${response.statusText}`);
-    }
-
-    const html = await response.text();
-
-    // 2. Extract with AI
-    const data = await extractWithAI(html, prompt);
-
-    // 3. Save to Supabase (Optional: Create a new table or just return)
-    // For now, we return it directly to the user.
-    
-    return NextResponse.json({ 
-      success: true, 
-      data,
-      url,
-      prompt
-    });
-
-  } catch (error: any) {
-    console.error('AI API Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
 }

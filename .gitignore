@@ -43,3 +43,12 @@ yarn-error.log*
 tmp/
 
 tmp/
+
+# WebScrapeX v2
+.data/
+public/sw.js
+public/sw.js.map
+public/swe-worker-*.js
+.testfox/
+*.log
+!.env.example

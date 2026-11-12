@@ -1,107 +1,68 @@
-import crypto from "crypto";
-import { supabaseAdmin, supabase } from "./supabase";
+import 'server-only';
+import crypto from 'node:crypto';
+import { env } from '@/lib/env';
+import { supabaseAdmin } from '@/lib/supabase/server';
 
+/** Stable pseudo-id for an email before the auth user exists (keys verification_tokens). */
 export function emailToUuid(email: string): string {
-  const hash = crypto.createHash("sha256").update(email.toLowerCase().trim()).digest("hex");
-  return `${hash.substring(0, 8)}-${hash.substring(8, 12)}-4${hash.substring(13, 16)}-a${hash.substring(17, 20)}-${hash.substring(20, 32)}`;
+    const hash = crypto.createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
+    return `${hash.substring(0, 8)}-${hash.substring(8, 12)}-4${hash.substring(13, 16)}-a${hash.substring(17, 20)}-${hash.substring(20, 32)}`;
 }
 
 export async function isEmailAlreadyRegistered(email: string): Promise<boolean> {
-  const cleanEmail = email.toLowerCase().trim();
-  const client = supabaseAdmin || supabase;
-
-  // 1. Check Supabase Auth users via service role client if available
-  if (supabaseAdmin) {
-    try {
-      const { data, error } = await supabaseAdmin.auth.admin.listUsers();
-      if (!error && data?.users) {
-        const existing = data.users.find((u) => u.email?.toLowerCase() === cleanEmail);
-        // Consider user registered if confirmed or exists in auth
-        if (existing && (existing.email_confirmed_at || existing.confirmed_at || existing.id)) {
-          return true;
-        }
-      }
-    } catch (e) {
-      console.error("Error checking auth users:", e);
+    const admin = supabaseAdmin();
+    if (!admin) return false;
+    const clean = email.toLowerCase().trim();
+    const { data: profile } = await admin.from('profiles').select('id').eq('email', clean).maybeSingle();
+    if (profile) return true;
+    for (let page = 1; page <= 20; page++) {
+        const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+        if (error || !data?.users.length) break;
+        if (data.users.some((u) => u.email?.toLowerCase() === clean)) return true;
+        if (data.users.length < 1000) break;
     }
-  }
-
-  // 2. Check public.profiles table
-  try {
-    const { data: profile } = await client
-      .from("profiles")
-      .select("id, verified")
-      .eq("email", cleanEmail)
-      .maybeSingle();
-
-    if (profile) {
-      return true;
-    }
-  } catch (e) {
-    // Ignore error if table is missing or RLS restricts
-  }
-
-  return false;
+    return false;
 }
 
-export async function sendMailjetOtp(email: string, fullName: string, code: string): Promise<{ success: boolean; error?: string }> {
-  const apiKey = process.env.MAILJET_API_KEY;
-  const secretKey = process.env.MAILJET_SECRET_KEY;
-  const senderEmail = process.env.MAILJET_SENDER_EMAIL || "noreply@webscrape-x.com";
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
-  if (!apiKey || !secretKey) {
-    console.warn("⚠️ Mailjet API credentials missing (MAILJET_API_KEY / MAILJET_SECRET_KEY). Simulated OTP Code:", code);
-    return { success: true };
-  }
-
-  const authHeader = `Basic ${Buffer.from(`${apiKey}:${secretKey}`).toString("base64")}`;
-
-  try {
-    const res = await fetch("https://api.mailjet.com/v3.1/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
-      body: JSON.stringify({
-        Messages: [
-          {
-            From: {
-              Email: senderEmail,
-              Name: "WebScrapeX Security",
-            },
-            To: [
-              {
-                Email: email.toLowerCase().trim(),
-                Name: fullName || "User",
-              },
-            ],
-            Subject: "Your WebScrapeX Verification Code",
-            TextPart: `Your verification code is: ${code}`,
-            HTMLPart: `
-              <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; background: #0a0a0c; color: #ffffff; border-radius: 16px; border: 1px solid #27272a;">
-                <h2 style="color: #6366f1; font-weight: 800; font-size: 24px; margin-bottom: 8px;">WebScrapeX</h2>
-                <p style="color: #a1a1aa; font-size: 15px; margin-bottom: 24px;">Verify your email address to complete registration.</p>
-                <div style="background: #18181b; border: 1px solid #3f3f46; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
-                  <span style="font-family: monospace; font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #6366f1;">${code}</span>
-                </div>
-                <p style="color: #71717a; font-size: 13px; margin-bottom: 0;">This 6-digit code will expire in 15 minutes. If you did not request this, you can safely ignore this email.</p>
-              </div>
-            `,
-          },
-        ],
-      }),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("Mailjet API Error:", res.status, errText);
-      return { success: false, error: `Failed to send email via Mailjet API (${res.status})` };
+export async function sendMailjetOtp(email: string, fullName: string, code: string): Promise<{ success: boolean; simulated?: boolean; error?: string }> {
+    if (!env.mailjetKey || !env.mailjetSecret) {
+        if (process.env.NODE_ENV === 'production') {
+            return { success: false, error: 'Email delivery is not set up (MAILJET_API_KEY / MAILJET_SECRET_KEY).' };
+        }
+        console.warn(`[dev] Mailjet is not configured. Sign-up code for ${email}: ${code}`);
+        return { success: true, simulated: true };
     }
 
+    const res = await fetch('https://api.mailjet.com/v3.1/send', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Basic ${Buffer.from(`${env.mailjetKey}:${env.mailjetSecret}`).toString('base64')}`,
+        },
+        signal: AbortSignal.timeout(10_000),
+        body: JSON.stringify({
+            Messages: [
+                {
+                    From: { Email: env.mailjetSender ?? 'noreply@webscrape-x.com', Name: 'WebScrapeX' },
+                    To: [{ Email: email, Name: fullName || 'there' }],
+                    Subject: `${code} is your WebScrapeX code`,
+                    TextPart: `Your WebScrapeX verification code is ${code}. It expires in 15 minutes.`,
+                    HTMLPart: `<div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:480px;margin:0 auto;padding:28px;background:#f7f5f0;color:#1d1f24;border-radius:10px;border:1px solid #e3ded3">
+<p style="margin:0 0 4px;font:600 13px ui-monospace,monospace;letter-spacing:.08em;color:#b2501f">WEBSCRAPEX</p>
+<h1 style="margin:0 0 12px;font-size:20px">Hi ${escapeHtml(fullName || 'there')}, here is your sign-up code</h1>
+<p style="margin:0 0 20px;color:#555">Enter it on the sign-up page to finish creating your account.</p>
+<p style="margin:0 0 20px;padding:16px;text-align:center;background:#fff;border:1px solid #e3ded3;border-radius:8px;font:700 32px ui-monospace,monospace;letter-spacing:10px">${code}</p>
+<p style="margin:0;color:#777;font-size:13px">The code expires in 15 minutes. If you did not ask for it, ignore this email.</p></div>`,
+                },
+            ],
+        }),
+    }).catch((e: Error) => ({ ok: false, status: 0, text: async () => e.message }) as unknown as Response);
+
+    if (!res.ok) {
+        console.error('Mailjet error', res.status);
+        return { success: false, error: `Could not send the email (Mailjet ${res.status || 'unreachable'}).` };
+    }
     return { success: true };
-  } catch (err: any) {
-    console.error("Error dispatching Mailjet email:", err);
-    return { success: false, error: err.message || "Failed to send verification email" };
-  }
 }

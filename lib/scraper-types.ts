@@ -1,46 +1,30 @@
-export type ScrapeMode = 'full' | 'social' | 'content' | 'design';
-import { SEOAudit } from './extractors/seo';
+import type { SEOAudit } from './extractors/seo';
 
-export interface ScrapeResult {
+/** What the scraper should collect. `custom` runs only the user's field selectors. */
+export type ScrapeMode = 'full' | 'content' | 'social' | 'design' | 'custom';
+
+/** `static` = plain HTTP fetch + Cheerio. `rendered` = headless Chrome (runs page JavaScript). */
+export type ScrapeEngine = 'static' | 'rendered';
+
+export type FieldAttribute = 'text' | 'html' | 'href' | 'src' | 'attr';
+
+export interface FieldSelector {
+    name: string;
+    selector: string;
+    attribute: FieldAttribute;
+    /** Attribute name when `attribute === 'attr'` (e.g. `data-price`). */
+    attrName?: string;
+    /** Collect every match instead of the first one. Ignored when a row selector is set. */
+    multiple?: boolean;
+}
+
+export interface ScrapeOptions {
     url: string;
-    metadata: {
-        title: string;
-        description: string;
-        keywords: string[];
-        favicon: string;
-    };
-    colors: string[];
-    fonts: string[];
-    images: Array<{
-        url: string;
-        localPath?: string;
-        size?: number; // bytes
-    }>;
-    cssFiles: Array<{
-        name: string;
-        size: number;
-        content?: string; // Optional raw content
-    }>;
-    jsFiles: Array<{
-        name: string;
-        size: number;
-    }>;
-    html: string;
-    links: string[];
-    technologies: string[];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rawAssets: any[];
-    social?: SocialMetadata;
-    contentAnalysis?: ContentAnalysis;
-    linkedinProfile?: LinkedInProfile;
-    designIntelligence?: {
-        visualCohesion: string;
-        technicalMaturity: string;
-        seoReadiness: number;
-    };
-    screenshotUrl?: string;
-    pdfUrl?: string;
-    seo?: SEOAudit;
+    mode: ScrapeMode;
+    engine: ScrapeEngine;
+    fields: FieldSelector[];
+    /** Optional repeating container (e.g. `article.product`). Each match becomes one row. */
+    rowSelector?: string;
 }
 
 export interface LinkedInProfile {
@@ -50,17 +34,8 @@ export interface LinkedInProfile {
     about?: string;
     image?: string;
     connections?: string;
-    experience: Array<{
-        title: string;
-        company: string;
-        duration?: string;
-        location?: string;
-    }>;
-    education: Array<{
-        school: string;
-        degree?: string;
-        duration?: string;
-    }>;
+    experience: Array<{ title: string; company: string; duration?: string; location?: string }>;
+    education: Array<{ school: string; degree?: string; duration?: string }>;
 }
 
 export interface SocialMetadata {
@@ -78,8 +53,72 @@ export interface SocialMetadata {
 
 export interface ContentAnalysis {
     readabilityScore?: number;
-    readingTime?: number; // Estimated minutes
-    cleanText?: string;   // Main article text
-    byline?: string;      // Author/Byline
+    readingTime?: number;
+    cleanText?: string;
+    byline?: string;
     wordCount?: number;
+}
+
+export interface RobotsVerdict {
+    allowed: boolean;
+    robotsUrl: string;
+    /** The rule that decided the verdict, e.g. `Disallow: /private`. */
+    matchedRule?: string;
+    crawlDelay?: number;
+    /** How robots.txt itself responded. */
+    status: 'found' | 'missing' | 'unreachable';
+}
+
+export interface FetchInfo {
+    requestedUrl: string;
+    finalUrl: string;
+    status: number;
+    contentType: string;
+    bytes: number;
+    durationMs: number;
+    engine: ScrapeEngine;
+    truncated: boolean;
+}
+
+export type DataRow = Record<string, string>;
+
+export interface DataTable {
+    caption: string;
+    columns: string[];
+    rows: DataRow[];
+}
+
+export interface ScrapeResult {
+    version: 2;
+    url: string;
+    options: Omit<ScrapeOptions, 'url'>;
+    fetch: FetchInfo;
+    robots: RobotsVerdict;
+    metadata: {
+        title: string;
+        description: string;
+        keywords: string[];
+        favicon: string;
+        lang?: string;
+        canonical?: string;
+    };
+    /** Custom selector output: one object per row. */
+    fields?: { columns: string[]; rows: DataRow[] };
+    tables?: DataTable[];
+    headings?: Array<{ level: number; text: string }>;
+    links?: Array<{ href: string; text: string; kind: 'internal' | 'external' | 'social' }>;
+    images?: Array<{ url: string; alt: string }>;
+    colors?: string[];
+    fonts?: string[];
+    technologies?: string[];
+    social?: SocialMetadata;
+    contentAnalysis?: ContentAnalysis;
+    linkedinProfile?: LinkedInProfile;
+    seo?: SEOAudit;
+    screenshot?: string;
+    pdfUrl?: string;
+    /** First 200 KB of the page HTML. */
+    html: string;
+    warnings: string[];
+    completedAt: string;
 }

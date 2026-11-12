@@ -1,109 +1,52 @@
-import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { ThemeProvider } from "@/components/ThemeProvider";
-import { MotionProvider } from "@/components/layout/MotionProvider";
-import { Navbar } from "@/components/layout/Navbar";
-import NextTopLoader from 'nextjs-toploader';
+import type { Metadata, Viewport } from 'next';
+import { Bricolage_Grotesque, IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
+import { Providers } from '@/components/providers';
+import { supabaseEnabled } from '@/lib/env';
+import './globals.css';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+const display = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bricolage', display: 'swap', axes: ['opsz'] });
+const sans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-plex-sans', display: 'swap' });
+const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-plex-mono', display: 'swap' });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export const viewport: Viewport = {
-  themeColor: "#000000",
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-};
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://webscrapex.com'),
-  title: {
-    default: "WebScrapeX - Premium Website Scraper",
-    template: "%s | WebScrapeX"
-  },
-  description: "Extract assets, metadata, colors, technologies, and design systems from any website with one click. Properties analysis, font detection, and media extraction tool.",
-  applicationName: 'WebScrapeX',
-  authors: [{ name: 'WebScrapeX Team', url: 'https://webscrapex.com' }],
-  generator: 'Next.js',
-  keywords: ['web scraper', 'design system extractor', 'website analysis', 'css extractor', 'font detector', 'color palette generator', 'web design tool', 'dev tools'],
-  referrer: 'origin-when-cross-origin',
-  creator: 'WebScrapeX',
-  publisher: 'WebScrapeX',
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
+    metadataBase: new URL(siteUrl),
+    title: { default: 'WebScrapeX — scrape any page into clean data', template: '%s · WebScrapeX' },
+    description:
+        'Point WebScrapeX at a URL, pick CSS selectors or an audit mode, and get rows you can export as CSV or JSON. Respects robots.txt, rate-limited, with job history and an HTTP API.',
+    applicationName: 'WebScrapeX',
+    keywords: ['web scraper', 'CSS selectors', 'CSV export', 'robots.txt', 'SEO audit', 'Next.js'],
+    openGraph: {
+        type: 'website',
+        siteName: 'WebScrapeX',
+        title: 'WebScrapeX — scrape any page into clean data',
+        description: 'CSS-selector scraping, page audits and CSV/JSON export. Polite by default: robots.txt and rate limits built in.',
     },
-  },
-  openGraph: {
-    type: 'website',
-    locale: 'en_US',
-    url: 'https://webscrapex.com',
-    siteName: 'WebScrapeX',
-    title: 'WebScrapeX - Premium Website Scraper & Design Extractor',
-    description: 'Deconstruct any website\'s design system in seconds. Colors, fonts, assets, and code — extracted and analyzed.',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'WebScrapeX Dashboard Preview',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'WebScrapeX - The Ultimate Web Design Inspector',
-    description: 'Extract assets, color palettes, and typography from any website instantly.',
-    images: ['/og-image.png'],
-    creator: '@webscrapex',
-  },
-  icons: {
-    icon: "/icon.svg",
-    shortcut: "/icon.svg",
-    apple: "/apple-touch-icon.png",
-  },
+    twitter: { card: 'summary_large_image' },
+    appleWebApp: { capable: true, title: 'WebScrapeX', statusBarStyle: 'default' },
+    formatDetection: { telephone: false },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen h-auto bg-background text-foreground transition-colors duration-300 relative overflow-x-hidden`}
-      >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <MotionProvider>
-            <NextTopLoader color="hsl(var(--primary))" showSpinner={false} height={3} />
-            <div className="relative">
-              <Navbar />
-              {children}
-            </div>
-          </MotionProvider>
-        </ThemeProvider>
-      </body>
-    </html>
-  );
+export const viewport: Viewport = {
+    themeColor: [
+        { media: '(prefers-color-scheme: light)', color: '#f8f6f1' },
+        { media: '(prefers-color-scheme: dark)', color: '#16181d' },
+    ],
+    width: 'device-width',
+    initialScale: 1,
+    viewportFit: 'cover',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+    return (
+        <html lang="en" suppressHydrationWarning className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+            <body className="min-h-dvh">
+                <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:shadow-panel">
+                    Skip to content
+                </a>
+                <Providers mode={supabaseEnabled ? 'supabase' : 'local'}>{children}</Providers>
+            </body>
+        </html>
+    );
 }
