@@ -100,7 +100,7 @@ export function ScrapeConsole({ initialUrl, signedIn }: { initialUrl?: string; s
     const { ref: urlRegisterRef, ...urlField } = register('url');
 
     return (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
             <form onSubmit={handleSubmit(onSubmit)} className="min-w-0 space-y-5" noValidate aria-busy={running}>
                 {/* Command line */}
                 <div className="panel overflow-hidden">
@@ -267,7 +267,7 @@ export function ScrapeConsole({ initialUrl, signedIn }: { initialUrl?: string; s
                 </AnimatePresence>
             </form>
 
-            <div className="space-y-4 lg:sticky lg:top-10 lg:self-start">
+            <div className="grid gap-4 md:grid-cols-2 xl:sticky xl:top-10 xl:block xl:space-y-4 xl:self-start">
                 <PreflightPanel url={url ?? ''} refreshKey={preflightKey} />
                 <aside className="rounded-lg border border-dashed border-border-strong p-4 text-[13px] text-muted-foreground">
                     <p className="mb-1 font-medium text-foreground">Polite by default</p>
