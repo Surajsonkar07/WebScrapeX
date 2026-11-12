@@ -23,7 +23,17 @@ function Heading({ title, sub }: { title: string; sub: React.ReactNode }) {
     );
 }
 
-function LocalModeNotice() {
+function LocalModeNotice({ mode }: { mode: 'local' | 'unconfigured' }) {
+    if (mode === 'unconfigured') {
+        return (
+            <div className="space-y-4">
+                <Heading title="Not set up yet" sub="This deployment has no Supabase keys, so sign-in is unavailable. The site owner needs to add them (or explicitly enable local mode)." />
+                <Button asChild variant="secondary">
+                    <Link href="/setup">See what is missing</Link>
+                </Button>
+            </div>
+        );
+    }
     return (
         <div className="space-y-4">
             <Heading title="Accounts are off" sub="Supabase is not configured, so WebScrapeX runs as a single local workspace — no sign-in needed." />
@@ -92,7 +102,7 @@ export function LoginForm() {
     const next = safeNext(params.get('next'));
     const { register, handleSubmit, formState, setError } = useForm<z.infer<typeof loginSchema>>({ resolver: zodResolver(loginSchema) });
 
-    if (mode === 'local') return <LocalModeNotice />;
+    if (mode !== 'supabase') return <LocalModeNotice mode={mode} />;
 
     const onSubmit = handleSubmit(async (v) => {
         const { error } = await supabaseBrowser().auth.signInWithPassword({ email: v.email, password: v.password });
@@ -151,7 +161,7 @@ export function SignupForm() {
     const d = useForm<z.infer<typeof detailsSchema>>({ resolver: zodResolver(detailsSchema) });
     const c = useForm<z.infer<typeof codeSchema>>({ resolver: zodResolver(codeSchema) });
 
-    if (mode === 'local') return <LocalModeNotice />;
+    if (mode !== 'supabase') return <LocalModeNotice mode={mode} />;
 
     const sendCode = async (v: z.infer<typeof detailsSchema>) => {
         const res = await fetch('/api/auth/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: v.email, fullName: v.fullName }) });
@@ -263,7 +273,7 @@ export function ForgotForm() {
     const mode = useAppMode();
     const [sent, setSent] = useState<string | null>(null);
     const { register, handleSubmit, formState, setError } = useForm<{ email: string }>({ resolver: zodResolver(z.object({ email: z.string().trim().email('Enter a valid email') })) });
-    if (mode === 'local') return <LocalModeNotice />;
+    if (mode !== 'supabase') return <LocalModeNotice mode={mode} />;
 
     const onSubmit = handleSubmit(async ({ email }) => {
         const { error } = await supabaseBrowser().auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/auth/callback?next=/reset-password` });
@@ -300,7 +310,7 @@ export function ResetForm() {
     const mode = useAppMode();
     const router = useRouter();
     const { register, handleSubmit, formState, setError } = useForm<z.infer<typeof resetSchema>>({ resolver: zodResolver(resetSchema) });
-    if (mode === 'local') return <LocalModeNotice />;
+    if (mode !== 'supabase') return <LocalModeNotice mode={mode} />;
 
     const onSubmit = handleSubmit(async ({ password }) => {
         const { error } = await supabaseBrowser().auth.updateUser({ password });

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
@@ -20,8 +20,8 @@ const schema = z.object({
 export function ScheduleDialog({ open, onOpenChange, url, options }: { open: boolean; onOpenChange: (o: boolean) => void; url: string; options: Omit<ScrapeOptions, 'url'> }) {
     const router = useRouter();
     const [busy, setBusy] = useState(false);
-    const { register, handleSubmit, watch, formState } = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { frequency: 'daily', webhookUrl: '' } });
-    const freq = watch('frequency');
+    const { register, handleSubmit, control, formState } = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { frequency: 'daily', webhookUrl: '' } });
+    const freq = useWatch({ control, name: 'frequency' });
 
     const submit = handleSubmit(async (v) => {
         setBusy(true);

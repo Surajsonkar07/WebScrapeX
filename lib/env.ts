@@ -45,11 +45,21 @@ export const env = {
 /** Supabase is used when both public values exist and local mode is not forced. */
 export const supabaseEnabled = !!(env.supabaseUrl && env.supabaseAnonKey && !forceLocal);
 
+/**
+ * Single-user local mode (no sign-in). Automatic in development; in production
+ * it must be switched on explicitly, so a deploy with missing keys never
+ * becomes an open, unauthenticated scraper.
+ */
+export const localModeAllowed = !supabaseEnabled && (process.env.NODE_ENV !== 'production' || forceLocal);
+
+export type AppMode = 'supabase' | 'local' | 'unconfigured';
+export const appMode: AppMode = supabaseEnabled ? 'supabase' : localModeAllowed ? 'local' : 'unconfigured';
+
 export type SetupItem = { name: string; ok: boolean; required: boolean; purpose: string };
 
-export function setupStatus(): { mode: 'supabase' | 'local'; items: SetupItem[] } {
+export function setupStatus(): { mode: AppMode; items: SetupItem[] } {
     return {
-        mode: supabaseEnabled ? 'supabase' : 'local',
+        mode: appMode,
         items: [
             { name: 'NEXT_PUBLIC_SUPABASE_URL', ok: !!env.supabaseUrl, required: true, purpose: 'Accounts, job history and storage' },
             { name: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', ok: !!env.supabaseAnonKey, required: true, purpose: 'Browser sign-in and row-level security' },

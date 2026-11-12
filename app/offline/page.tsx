@@ -14,6 +14,7 @@ export default function OfflinePage() {
                 </div>
                 <h1 className="text-2xl font-semibold">You&apos;re offline</h1>
                 <p className="text-muted-foreground">Scraping runs on the server, so it needs a connection. Pages you opened recently are still available from the cache.</p>
+                {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- full reload on purpose: retries the network instead of a client transition */}
                 <a href="/" className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
                     Try again
                 </a>

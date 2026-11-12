@@ -1,12 +1,33 @@
 import type { Metadata, Viewport } from 'next';
-import { Bricolage_Grotesque, IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
+import localFont from 'next/font/local';
 import { Providers } from '@/components/providers';
-import { supabaseEnabled } from '@/lib/env';
+import { appMode } from '@/lib/env';
 import './globals.css';
 
-const display = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bricolage', display: 'swap', axes: ['opsz'] });
-const sans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-plex-sans', display: 'swap' });
-const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-plex-mono', display: 'swap' });
+// Self-hosted from @fontsource packages: no network needed at build time, no layout shift.
+const display = localFont({
+    src: '../node_modules/@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2',
+    variable: '--font-bricolage',
+    weight: '200 800',
+    display: 'swap',
+});
+const sans = localFont({
+    src: [
+        { path: '../node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2', weight: '400', style: 'normal' },
+        { path: '../node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-500-normal.woff2', weight: '500', style: 'normal' },
+        { path: '../node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff2', weight: '600', style: 'normal' },
+    ],
+    variable: '--font-plex-sans',
+    display: 'swap',
+});
+const mono = localFont({
+    src: [
+        { path: '../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2', weight: '400', style: 'normal' },
+        { path: '../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    ],
+    variable: '--font-plex-mono',
+    display: 'swap',
+});
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
@@ -45,7 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:shadow-panel">
                     Skip to content
                 </a>
-                <Providers mode={supabaseEnabled ? 'supabase' : 'local'}>{children}</Providers>
+                <Providers mode={appMode}>{children}</Providers>
             </body>
         </html>
     );

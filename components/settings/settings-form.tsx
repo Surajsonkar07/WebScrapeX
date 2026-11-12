@@ -1,15 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useScrapeDefaults, type ScrapeDefaults } from '@/lib/use-defaults';
 import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label, Select } from '@/components/ui/field';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
 import { MODES } from '@/lib/scrape/schema';
-
-const KEY = 'wsx:defaults';
 
 function Row({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
     return (
@@ -24,24 +22,12 @@ function Row({ title, hint, children }: { title: string; hint: string; children:
 }
 
 export function SettingsForm({ account, quota }: { account: { email: string; name: string | null; local: boolean }; quota: { minute: { used: number; limit: number }; hour: { used: number; limit: number } } }) {
-    const [mode, setMode] = useState('full');
-    const [engine, setEngine] = useState('static');
+    const [defaults, store] = useScrapeDefaults();
+    const mode = defaults.mode ?? 'full';
+    const engine = defaults.engine ?? 'static';
 
-    useEffect(() => {
-        try {
-            const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}');
-            if (saved.mode) setMode(saved.mode);
-            if (saved.engine) setEngine(saved.engine);
-        } catch {
-            /* ignore */
-        }
-    }, []);
-
-    const save = (next: { mode?: string; engine?: string }) => {
-        const value = { mode, engine, ...next };
-        localStorage.setItem(KEY, JSON.stringify(value));
-        if (next.mode) setMode(next.mode);
-        if (next.engine) setEngine(next.engine);
+    const save = (next: ScrapeDefaults) => {
+        store(next);
         toast.success('Default saved', { description: 'New scrapes in the console start with it.' });
     };
 

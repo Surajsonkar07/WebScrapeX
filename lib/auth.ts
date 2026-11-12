@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { headers } from 'next/headers';
-import { env, supabaseEnabled } from '@/lib/env';
+import { env, localModeAllowed, supabaseEnabled } from '@/lib/env';
 import { createSupabaseServer, supabaseAnon } from '@/lib/supabase/server';
 import { getStore } from '@/lib/store';
 
@@ -25,7 +25,7 @@ const isAdmin = (email: string | null | undefined) => !!email && env.adminEmails
  */
 export async function getViewer(): Promise<Viewer | null> {
     if (!supabaseEnabled) {
-        return LOCAL_VIEWER;
+        return localModeAllowed ? LOCAL_VIEWER : null;
     }
 
     const auth = (await headers()).get('authorization');

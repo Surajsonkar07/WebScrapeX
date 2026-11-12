@@ -52,3 +52,4 @@ public/swe-worker-*.js
 .testfox/
 *.log
 !.env.example
+.claude/

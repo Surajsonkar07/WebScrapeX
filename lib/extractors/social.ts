@@ -42,11 +42,11 @@ export function extractSocialData(html: string): SocialMetadata {
                     // Specific Person Data
                     if (person.jobTitle) social.twitterCreator = person.jobTitle; // Using twitterCreator field for Job Title temporarily
                 }
-            } catch (e) {
+            } catch {
                 // Ignore parse errors
             }
         });
-    } catch (e) {
+    } catch {
         // Ignore cheerio errors
     }
 

@@ -6,7 +6,7 @@ import { LazyMotion, MotionConfig, domAnimation } from 'motion/react';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/overlay';
 
-export type AppMode = 'supabase' | 'local';
+export type AppMode = 'supabase' | 'local' | 'unconfigured';
 
 const ModeContext = React.createContext<AppMode>('local');
 export const useAppMode = () => React.useContext(ModeContext);

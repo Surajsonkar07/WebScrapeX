@@ -74,8 +74,7 @@ export function extractContent(html: string, baseUrl: string): ContentData {
     $('h6').each((_, el) => { content.headings.h6.push($(el).text().trim()); });
 
     // Clean empty headings
-    Object.keys(content.headings).forEach(k => {
-        // @ts-ignore
+    (Object.keys(content.headings) as Array<keyof ContentData['headings']>).forEach(k => {
         content.headings[k] = content.headings[k].filter(t => t.length > 0);
     });
 

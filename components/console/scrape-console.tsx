@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { FieldError, Input, Label, Select } from '@/components/ui/field';
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuTrigger } from '@/components/ui/overlay';
 import { MODES, scrapeRequestSchema } from '@/lib/scrape/schema';
+import { readDefaults } from '@/lib/use-defaults';
 import { cn } from '@/lib/utils';
 import { PreflightPanel } from './preflight';
 import { PRESETS } from './presets';
@@ -21,7 +22,6 @@ import { RunProgress } from './run-progress';
 type FormIn = z.input<typeof scrapeRequestSchema>;
 type FormOut = z.output<typeof scrapeRequestSchema>;
 
-const DEFAULTS_KEY = 'wsx:defaults';
 
 export function ScrapeConsole({ initialUrl, signedIn }: { initialUrl?: string; signedIn: boolean }) {
     const router = useRouter();
@@ -41,18 +41,13 @@ export function ScrapeConsole({ initialUrl, signedIn }: { initialUrl?: string; s
 
     // Restore saved defaults (Settings → Scrape defaults).
     useEffect(() => {
-        try {
-            const saved = JSON.parse(localStorage.getItem(DEFAULTS_KEY) ?? '{}');
-            if (saved.mode) setValue('mode', saved.mode);
-            if (saved.engine) setValue('engine', saved.engine);
-        } catch {
-            /* ignore */
-        }
+        const saved = readDefaults();
+        if (MODES.some((x) => x.id === saved.mode)) setValue('mode', saved.mode as FormIn['mode']);
+        if (saved.engine === 'static' || saved.engine === 'rendered') setValue('engine', saved.engine);
     }, [setValue]);
 
-    useEffect(() => {
-        if (mode === 'custom') setShowFields(true);
-    }, [mode]);
+    // "Fields only" mode is meaningless without the editor, so it stays open there.
+    const fieldsOpen = showFields || mode === 'custom';
 
     const applyPreset = (id: string) => {
         const p = PRESETS.find((x) => x.id === id);
@@ -182,8 +177,8 @@ export function ScrapeConsole({ initialUrl, signedIn }: { initialUrl?: string; s
                 {/* Fields */}
                 <section className="rounded-lg border border-border">
                     <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                        <button type="button" onClick={() => setShowFields((s) => !s)} aria-expanded={showFields} className="flex min-h-10 items-center gap-2 text-sm font-medium">
-                            <ChevronDown className={cn('size-4 transition-transform', !showFields && '-rotate-90')} />
+                        <button type="button" onClick={() => setShowFields((s) => !s)} aria-expanded={fieldsOpen} className="flex min-h-10 items-center gap-2 text-sm font-medium">
+                            <ChevronDown className={cn('size-4 transition-transform', !fieldsOpen && '-rotate-90')} />
                             Fields <span className="font-normal text-muted-foreground">— CSS selectors → columns</span>
                             {fields.fields.length > 0 && <span className="rounded-sm bg-muted px-1.5 font-mono text-[11px]">{fields.fields.length}</span>}
                         </button>
@@ -206,7 +201,7 @@ export function ScrapeConsole({ initialUrl, signedIn }: { initialUrl?: string; s
                     </div>
 
                     <AnimatePresence initial={false}>
-                        {showFields && (
+                        {fieldsOpen && (
                             <m.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                                 <div className="space-y-4 border-t border-border p-4">
                                     <div className="space-y-1.5">

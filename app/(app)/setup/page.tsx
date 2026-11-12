@@ -11,7 +11,7 @@ export default function SetupPage() {
         <div className="space-y-8">
             <PageHeader
                 eyebrow="Setup"
-                title={s.mode === 'supabase' ? 'Connected to Supabase' : 'Running in local mode'}
+                title={s.mode === 'supabase' ? 'Connected to Supabase' : s.mode === 'local' ? 'Running in local mode' : 'Not set up yet'}
                 description={
                     s.mode === 'supabase'
                         ? 'Accounts, history and files live in your Supabase project. The checklist shows which optional features are switched on.'

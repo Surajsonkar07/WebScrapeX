@@ -35,14 +35,14 @@ function Meter({ label, used, limit }: { label: string; used: number; limit: num
 
 /** Live robots.txt + quota readout for the URL being typed. */
 export function PreflightPanel({ url, refreshKey }: { url: string; refreshKey: number }) {
-    const [state, setState] = useState<State>({ kind: 'idle' });
+    const [fetched, setState] = useState<State>({ kind: 'idle' });
+    const valid = /^(https?:\/\/)?[^\s/]+\.[^\s]{2,}/.test(url.trim());
+    // An unusable URL always shows the idle hint, whatever the last check said.
+    const state: State = valid ? fetched : { kind: 'idle' };
 
     useEffect(() => {
         const value = url.trim();
-        if (!/^(https?:\/\/)?[^\s/]+\.[^\s]{2,}/.test(value)) {
-            setState({ kind: 'idle' });
-            return;
-        }
+        if (!/^(https?:\/\/)?[^\s/]+\.[^\s]{2,}/.test(value)) return;
         const ctrl = new AbortController();
         const t = setTimeout(async () => {
             setState({ kind: 'loading' });

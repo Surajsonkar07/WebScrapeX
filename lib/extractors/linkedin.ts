@@ -27,14 +27,14 @@ export function extractLinkedInProfile(html: string): LinkedInProfile | null {
 
                 if (person.worksFor) {
                     const companies = Array.isArray(person.worksFor) ? person.worksFor : [person.worksFor];
-                    profile.experience = companies.map((c: any) => ({
+                    profile.experience = companies.map((c: { name?: string }) => ({
                         title: person.jobTitle || 'Employee', // Schema often misses title per job
                         company: c.name || 'Unknown',
                     }));
                 }
             }
         });
-    } catch (e) {
+    } catch {
         // Ignore JSON parse errors
     }
 
